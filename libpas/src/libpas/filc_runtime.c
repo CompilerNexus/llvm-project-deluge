@@ -3692,7 +3692,7 @@ void filc_memmove(filc_thread* my_thread, filc_ptr dst, filc_ptr src, size_t cou
     memmove_impl(my_thread, dst, src, count, passed_origin);
 }
 
-static filc_ptr promote_cc_to_heap(filc_thread* my_thread, size_t size)
+static filc_ptr promote_cc_to_heap(filc_thread* my_thread, size_t size, bool do_tracking)
 {
     PAS_ASSERT(size <= filc_thread_cc_total_size(my_thread));
 
@@ -3710,17 +3710,24 @@ static filc_ptr promote_cc_to_heap(filc_thread* my_thread, size_t size)
         *(filc_word*)((char*)filc_object_lower(result_object) + offset) =
             *(filc_word*)filc_thread_cc_slot_at_offset(my_thread, offset);
     }
-    
+
+    /* Only need to do tracking when converting return values, since arguments are tracked by the
+       caller. */
+    if (do_tracking) {
+        for (offset = 0; offset < size; offset += FILC_WORD_SIZE) {
+            void* lower = filc_lower_or_box_get_lower(
+                filc_lower_or_box_load_unfenced(
+                    filc_thread_cc_aux_slot_at_offset(my_thread, offset)));
+            if (lower)
+                filc_thread_track_object(my_thread, filc_object_for_lower(lower));
+        }
+    }
+
     for (offset = 0; offset < size; offset += FILC_WORD_SIZE) {
         void* lower = filc_lower_or_box_get_lower(
             filc_lower_or_box_load_unfenced(
                 filc_thread_cc_aux_slot_at_offset(my_thread, offset)));
         if (lower) {
-            /* FIXME: We should do all of this tracking before we trigger aux creation.
-               
-               Also, we shouldn't do the tracking at all when we're promoting args to heap, since the
-               args are already tracked by the calleer. */
-            filc_thread_track_object(my_thread, filc_object_for_lower(lower));
             char* aux_ptr = filc_object_ensure_aux_ptr(my_thread, result_object);
             filc_store_barrier(my_thread, filc_object_for_lower(lower));
             filc_lower_or_box_store_unfenced_unbarriered(
@@ -3799,7 +3806,8 @@ filc_ptr filc_promote_args_to_heap(filc_thread* my_thread, size_t size)
     filc_native_frame native_frame;
     filc_push_native_frame(my_thread, &native_frame);
 
-    filc_ptr result = promote_cc_to_heap(my_thread, size);
+    bool do_tracking = false;
+    filc_ptr result = promote_cc_to_heap(my_thread, size, do_tracking);
 
     filc_pop_native_frame(my_thread, &native_frame);
 
@@ -3828,7 +3836,8 @@ filc_ptr filc_native_zcall(filc_thread* my_thread, filc_ptr callee_ptr, filc_ptr
     PAS_ASSERT(!result.has_exception);
     filc_unlock_top_native_frame(my_thread);
 
-    return promote_cc_to_heap(my_thread, result.return_size);
+    do_tracking = true;
+    return promote_cc_to_heap(my_thread, result.return_size, do_tracking);
 }
 
 void filc_native_zmemset(filc_thread* my_thread, filc_ptr dst_ptr, unsigned value, size_t count)
