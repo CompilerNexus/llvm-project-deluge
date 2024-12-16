@@ -34,7 +34,22 @@ extern "C" {
 } /* tell emacs what's up */
 #endif
 
-/* This header defines the set of standard Fil-C APIs that are intended to be stable over time. */
+/* This header defines standard Fil-C APIs that are not part of C or C++ but are intended to be stable
+   over time in Fil-C.
+
+   You don't have to include this header to use Fil-C. Most C/C++ code works fine without being
+   modified to use any of these functions.
+
+   This header is especially useful for debugging (see zprintf), more powerful kinds of allocation
+   (like zgc_realloc_preserving_alignment), unoptimizable copy/set (zmemset/zmemmove), and various
+   totally safe but also very powerful pointer capability introspection/manipulation functions (like
+   zinbounds, zmkptr, etc). */
+
+/* __PIZLONATOR_WAS_HERE__ is defined by the Fil-C compiler to tell us that we're in Fil-C. This
+   header only makes sense in Fil-C. */
+#ifndef __PIZLONATOR_WAS_HERE__
+#error "Cannot use <stdfil.h> from Yolo-C"
+#endif
 
 /* You shouldn't use the filc_bool type or rely on its existence; I just need it to hack around C++
    being incompatible with C in this regard. */
@@ -45,7 +60,7 @@ typedef _Bool filc_bool;
 #endif
 
 /* This prints the given message and then shuts down the program using the same shutdown codepath
-   used for memory safety violatins (i.e. it's designed to really kill the shit out of the process). */
+   used for memory safety violatins (i.e. it's designed to really kill the process). */
 void zerror(const char* str);
 void zerrorf(const char* str, ...);
 
@@ -58,15 +73,11 @@ void zerrorf(const char* str, ...);
         zerrorf("%s:%d: %s: assertion %s failed.", __FILE__, __LINE__, __PRETTY_FUNCTION__, #exp); \
     } while (0)
 
-/* Allocate `count` bytes of memory zero-initialized and with all word types set to the unset type.
-   May allocate slightly more than `count`, based on the runtime's minalign (which is currently 16).
+/* Allocate `count` bytes of zero-initialized memory. May allocate slightly more than `count`, based
+   on the runtime's minalign (which is currently 16).
    
    This is a GC allocation, so freeing it is optional. Also, if you free it and then use it, your
    program is guaranteed to panic.
-
-   Memory that has the unset type may be used for any type of access, but then the type monotonically
-   transitions. For example, if you access some word in this object using int, then the type of that
-   word becomes int and stays that until the memory is freed.
 
    libc's malloc just forwards to this. There is no difference between calling `malloc` and
    `zgc_alloc`. */
@@ -74,13 +85,13 @@ void* zgc_alloc(__SIZE_TYPE__ count);
 
 /* Allocate `count` bytes of memory with the GC, aligned to `alignment`. Supports very large alignments,
    up to at least 128k (may support even larger ones in the future). Like with `zgc_alloc`, the memory
-   starts out with unset type. */
+   is zero-initalized. */
 void* zgc_aligned_alloc(__SIZE_TYPE__ alignment, __SIZE_TYPE__ count);
 
 /* Reallocates the object pointed at by `old_ptr` to now have `count` bytes, and returns the new
    pointer. `old_ptr` must satisfy `old_ptr == zgetlower(old_ptr)`, otherwise the runtime panics your
    process. If `count` is larger than the size of `old_ptr`'s allocation, then the new space is
-   initialized to unset type. For the memory that is copied, the type is preserved.
+   zero initialized.
 
    libc's realloc just forwards to this. There is no difference between calling `realloc` and
    `zgc_realloc`. */
@@ -107,9 +118,9 @@ void* zgc_realloc_preserving_alignment(void* old_ptr, __SIZE_TYPE__ count);
    
    Freeing objects is optional in Fil-C, since Fil-C is garbage collected.
    
-   Freeing an object in Fil-C does not cause memory to be reclaimed immediately. Instead, it
-   transitions all of the word types in the object to the free type, preventing any future accesses
-   from working, and also sets the free flag in the object header. This has two GC implications:
+   Freeing an object in Fil-C does not cause memory to be reclaimed immediately. Instead, it changes
+   the upper bounds of the object to be the lower bounds and sets the free flag. This causes all
+   subsequent accesses to trap with a Fil-C panic. This has two GC implications:
    
    - The GC doesn't have to scan any outgoing pointers from this object, since those pointers are not
      reachable to the program (all accesses to them now trap). Hence, freeing an object has the
@@ -119,9 +130,8 @@ void* zgc_realloc_preserving_alignment(void* old_ptr, __SIZE_TYPE__ count);
    - The GC can replace all pointers to this object with pointers that still have the same integer
      address but use the free singleton as their capability. This allows the GC to reclaim memory for
      this object on the next cycle, even if there were still dangling pointers to this object. Those
-     dangling pointers would already have trapped on access even before the next cycle (since the
-     object's capability has the free type in each word, and the free bit set in the header).
-     Switching to the free singleton is not user-visible, except via ptr introspection like `%P` or
+     dangling pointers would already have trapped on access even before the next cycle. Switching to
+     the free singleton is not user-visible, except via ptr introspection like `%P` or
      `zptr_to_new_string`.
    
    libc's free just forwards to this. There is no difference between calling `free` and `zgc_free`. */
@@ -154,9 +164,8 @@ void* zgetupper(void* ptr);
 /* Tells if the pointer has a capability and that capability is not free. */
 filc_bool zhasvalidcap(void* ptr);
 
-/* Tells if the pointer is in bounds of lower/upper. This is not a guarantee that accesses will
-   succeed, since this does not check type. For example, valid function pointers are zinbounds but
-   cannot be "accessed" regardless of type (can only be called if in bounds). */
+/* Tells if the pointer is in bounds of lower/upper. This is a guarantee that a 1 byte access will
+   succeed on this pointer.. */
 static inline __attribute__((__always_inline__)) filc_bool zinbounds(void* ptr)
 {
     return ptr >= zgetlower(ptr) && ptr < zgetupper(ptr);
@@ -216,40 +225,10 @@ static inline __attribute__((__always_inline__)) void* zretagptr(void* newptr, v
 /* Direct access to the runtime's internal memset/memmove.
 
    Using the normal memset/memmove may result in the compiler optimizing them to loads and stores,
-   which then go through normal checking. But the runtime's internal implementations are much more
-   forgiving:
-
-   - zmemset with a zero value does not set the type of the memory; it just leaves it alone. This
-     means that after the zmemset-to-zero executes, you can still use the memory using whatever type
-     you like. The only exception is if you memset a misaligned smidgen (like not all 16 bytes of a
-     word). In that case, the type is set to int.
-
-     Note that you will get this behavior from any memset/bzero or even zeroing loop inferred as bzero
-     that the compiler doesn't then turn into direct stores.
-
-   - zmemmove will detect when it's copying zeroes. Any pointer-wide zeroes in the source will leave
-     the destination memory in whatever type it had previously. This is true even if the source is
-     misaligned relative to the destination. The main copying loop moves over the destination in a word
-     aligned manner, so if the "phase" of the src and dst relative to word size is different, the loop
-     is performing misaligned loads from the source. If such a misaligned load yields a zero - even as
-     a result of a race - then the destination is also zeroed (atomically) and its type is left
-     unchanged.
-
-     Note that you will get this behavior for any memcpy/memmove or even coping loop inferred as memcpy
-     that the compiler doesn't then turn into direct loads/stores.
-
-   Hence:
-
-   - If you're zeroing or copying memory (with loops or calls) in a way that obeys the C types, then
-     you don't have to do anything; it'll just work.
-
-   - If you're zeroing or copying memory (with loops or calls) in a way that plays fast and loose with
-     types, then you might have to call these functions instead.
-
-   It's worth noting that loops that copy/set pointers will never get turned into memset/memcpy, since
-   the MemCpyOptimizer avoids doing so for nonintegral pointers. Fil-C uses nonintegral pointers. But
-   the reverse is true. You might have a loop that copies bytes; that might get turned int a memcpy,
-   and then it might get the forgiving behavior. */
+   which then go through normal optimizations and normal checking. For example, it means that the
+   compiler can choose to elide them.
+   
+   Calling these functions forces the memset/memmove to really happen. */
 void zmemset(void* dst, unsigned value, __SIZE_TYPE__ count);
 void zmemmove(void* dst, void* src, __SIZE_TYPE__ count);
 
@@ -269,7 +248,7 @@ char* zptr_contents_to_new_string(const void* ptr);
    tend to be small; you can usually get away with storing them in 32 bits.
    
    The zptrtable itself is garbage collected, so you don't have to free it (and attempting to
-   free it will kill the shit out of your process).
+   free it will kill your process).
    
    You can have as many zptrtables as you like.
    
@@ -356,7 +335,7 @@ int zvsnprintf(char* buf, __SIZE_TYPE__ size, const char* format, __builtin_va_l
 int zsnprintf(char* buf, __SIZE_TYPE__ size, const char* format, ...);
 
 /* This is like asprintf, but instead of super annoyingly returning the string in an out argument,
-   it just fucking returns it in the return value like a fucking sensible function. */
+   it just returns it. */
 char* zvasprintf(const char* format, __builtin_va_list args);
 char* zasprintf(const char* format, ...);
 

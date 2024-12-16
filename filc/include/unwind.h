@@ -1,7 +1,11 @@
 /*
  * Fil-C unwind API.
  *
- * This is currently all stubbed out and is made to look like Itanium ABI, sicne that's simpler.
+ * The most important of these functions, RaiseException, is implemented by the Fil-C runtime. A bunch
+ * of these functions are stubbed out. The Fil-C unwinding ABI is a bit different from the Yolo-C one,
+ * so some of these functions aren't needed (for example there's no such thing as setting the IP).
+ *
+ * See also pizlonated_eh_landing_pad.h.
  *
  * Includes code copied from LLVM's libunwind, so this is licensed under the Apache License v2.0
  * with LLVM Exceptions.
