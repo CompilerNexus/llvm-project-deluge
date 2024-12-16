@@ -11,6 +11,7 @@
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <sys/epoll.h>
+#include <sys/stat.h>
 
 struct foo {
     char* a;
@@ -219,6 +220,15 @@ int main(int argc, char** argv)
     ZASSERT(f2.b == 42);
     ZASSERT(f2.c == 666);
     ZASSERT(f2.d == 1410);
+
+    fd = open("filc/test-output/fileio/allocatetest.txt", O_CREAT | O_WRONLY | O_EXCL, 0600);
+    ZASSERT(fd > 2);
+    ZASSERT(!posix_fallocate(fd, 666, 42));
+    struct stat s;
+    ZASSERT(!fstat(fd, &s));
+    ZASSERT(s.st_size == 666 + 42);
+    ZASSERT(!close(fd));
+    ZASSERT(!unlink("filc/test-output/fileio/allocatetest.txt"));
 
     return 0;
 }

@@ -8026,6 +8026,11 @@ int filc_native_zsys_clock_nanosleep(filc_thread* my_thread, int clockid, int fl
                                                    (struct timespec*)filc_ptr_ptr(rem_ptr)));
 }
 
+int filc_native_zsys_posix_fallocate(filc_thread* my_thread, int fd, long offset, long len)
+{
+    return FILC_SYSCALL(my_thread, posix_fallocate(fd, offset, len));
+}
+
 filc_ptr filc_native_zthread_self(filc_thread* my_thread)
 {
     static const bool verbose = false;

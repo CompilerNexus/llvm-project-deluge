@@ -250,6 +250,7 @@ void* zsys_mremap(void* old_address, __SIZE_TYPE__ old_size, __SIZE_TYPE__ new_s
                   void* new_address);
 int zsys_signalfd(int fd, const void* mask, int flags);
 int zsys_clock_nanosleep(int clockid, int flags, const void* request, void* remain);
+int zsys_posix_fallocate(int fd, long offset, long len);
 
 #ifdef __cplusplus
 }
