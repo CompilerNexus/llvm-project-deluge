@@ -31,6 +31,8 @@ set -x
 cd pizlonated-libedit
 
 ($MAKE distclean || echo whatever)
+rm -f configure doc/Makefile.in examples/Makefile.in src/Makefile.in
+autoreconf -i
 CC="$PWD/../build/bin/clang -g -O3" CPPFLAGS="-I$PWD/../pizfix/include/ncurses" ./configure --prefix="$PWD/../pizfix"
 $MAKE -j $NCPU
 $MAKE install
