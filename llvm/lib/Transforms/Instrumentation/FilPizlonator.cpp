@@ -941,6 +941,55 @@ struct AuxBaseAndPtr {
   AuxBaseAndPtr(Value* BaseP, Value* P): BaseP(BaseP), P(P) {}
 };
 
+enum class CapabilityInferenceState {
+  Bottom,
+  Definite,
+  Top
+};
+
+struct InferredCapability {
+  CapabilityInferenceState State { CapabilityInferenceState::Bottom };
+  Value* Capability;
+
+  InferredCapability() = default;
+
+  InferredCapability(CapabilityInferenceState State, Value* Capability):
+    State(State), Capability(Capability) {
+    if (State != CapabilityInferenceState::Definite)
+      assert(!Capability);
+    else
+      assert(Capability);
+  }
+
+  bool operator==(const InferredCapability& Other) const {
+    return State == Other.State && Capability == Other.Capability;
+  }
+
+  bool merge(const InferredCapability& Other) {
+    if (*this == Other)
+      return false;
+    
+    switch (State) {
+    case CapabilityInferenceState::Bottom:
+      *this = Other;
+      return true;
+
+    case CapabilityInferenceState::Definite:
+      if (Other.State == CapabilityInferenceState::Bottom)
+        return false;
+      State = CapabilityInferenceState::Top;
+      Capability = nullptr;
+      return true;
+
+    case CapabilityInferenceState::Top:
+      return false;
+    }
+
+    llvm_unreachable("Bad inference state");
+    return false;
+  }
+};
+
 class Pizlonator {
   static constexpr unsigned TargetAS = 0;
   
@@ -5397,6 +5446,184 @@ class Pizlonator {
       assert(G.getLinkage() != GlobalValue::AvailableExternallyLinkage);
   }
 
+  void expandConstantExprOperands(Instruction* I) {
+    for (unsigned Index = I->getNumOperands(); Index--;) {
+      Instruction* InsertBefore;
+      if (PHINode* P = dyn_cast<PHINode>(I))
+        InsertBefore = P->getIncomingBlock(Index)->getTerminator();
+      else
+        InsertBefore = I;
+      
+      Use& U = I->getOperandUse(Index);
+      if (ConstantExpr* CE = dyn_cast<ConstantExpr>(U)) {
+        Instruction* NewI = CE->getAsInstruction(InsertBefore);
+        expandConstantExprOperands(NewI);
+        U = NewI;
+      }
+    }
+  }
+
+  void expandConstantExprs() {
+    for (Function& F : M.functions()) {
+      if (F.isDeclaration())
+        continue;
+      
+      for (BasicBlock& BB : F) {
+        std::vector<Instruction*> Insts;
+        for (Instruction& I : BB)
+          Insts.push_back(&I);
+        for (Instruction* I : Insts)
+          expandConstantExprOperands(I);
+      }
+    }
+  }
+
+  void inferPointerAsIntLaunderingForFunction(Function& F) {
+    // If an inttoptr's inputs unambiguously lead to a single ptrtoint, then we can take that
+    // ptrtoint's capability.
+    //
+    // If an inttoptr's inputs unambigiously lead to a phi and that phi knows how to account for the
+    // capability of each of its inputs, then we can construct a phi to collect those capabilities. In
+    // fact, we can even construct such a phi if some of the inputs don't have capabilities.
+    //
+    // This suggests a simple kind of fixpoint where for each instruction, we either:
+    //
+    // - Don't know whether we can deduce the capability for that instruction because we haven't
+    //   considered it yet, or we know that there are zero possible capabilities (BOTTOM).
+    // - Know that there is a capability for that instruction.
+    // - Know that there is a conflict of capabilities for that instruction (TOP).
+    //
+    // It's cool how easy it is to write this as an abstract interpreter.
+
+    std::unordered_map<Instruction*, InferredCapability> InferredCapabilities;
+
+    std::vector<Instruction*> AllInsts;
+    for (BasicBlock& BB : F) {
+      for (Instruction& I : BB)
+        AllInsts.push_back(&I);
+    }
+    std::vector<Instruction*> InferInsts;
+    for (Instruction* I : AllInsts) {
+      if (PtrToIntInst* PtrToInt = dyn_cast<PtrToIntInst>(I)) {
+        InferredCapabilities[I] = InferredCapability(
+          CapabilityInferenceState::Definite, PtrToInt->getPointerOperand());
+        continue;
+      }
+      if (!I->getType()->isIntegerTy())
+        continue;
+      // Maybe we should cause all casts to lose the capability, but it's not obvious. For sure,
+      // truncing is suspect.
+      if (isa<CallBase>(I) || isa<LoadInst>(I) || isa<AtomicCmpXchgInst>(I) ||
+          isa<AtomicRMWInst>(I) || isa<CmpInst>(I) || isa<VAArgInst>(I) ||
+          isa<ExtractElementInst>(I) || isa<ExtractValueInst>(I) || isa<LandingPadInst>(I) ||
+          isa<FPToUIInst>(I) || isa<FPToSIInst>(I)) {
+        InferredCapabilities[I] = InferredCapability(CapabilityInferenceState::Bottom, nullptr);
+        continue;
+      }
+      InferInsts.push_back(I);
+    }
+
+    bool Changed = true;
+    while (Changed) {
+      Changed = false;
+      for (Instruction* I : InferInsts) {
+        for (Value* V : I->operands()) {
+          if (Instruction* I2 = dyn_cast<Instruction>(V)) {
+            InferredCapability I2Cap = InferredCapabilities[I2];
+            if ((isa<PHINode>(I) || isa<SelectInst>(I))
+                && I2Cap.State != CapabilityInferenceState::Bottom) {
+              InferredCapability ICap = InferredCapabilities[I];
+              assert(ICap.State == CapabilityInferenceState::Bottom ||
+                     ICap.State == CapabilityInferenceState::Definite);
+              Value* Capability = ICap.Capability;
+              if (!Capability) {
+                assert(ICap.State == CapabilityInferenceState::Bottom);
+                if (PHINode* Phi = dyn_cast<PHINode>(I)) {
+                  PHINode* NewPhi = PHINode::Create(
+                    RawPtrTy, Phi->getNumOperands(), "filc_capability_phi", Phi);
+                  NewPhi->setDebugLoc(Phi->getDebugLoc());
+                  Capability = NewPhi;
+                } else {
+                  SelectInst* Select = dyn_cast<SelectInst>(I);
+                  assert(Select);
+                  SelectInst* NewSelect = SelectInst::Create(
+                    Select->getCondition(), RawNull, RawNull, "filc_capability_select", Select);
+                  Capability = NewSelect;
+                }
+              }
+              assert(Capability);
+              I2Cap = InferredCapability(CapabilityInferenceState::Definite, Capability);
+            }
+            Changed |= InferredCapabilities[I].merge(I2Cap);
+          }
+        }
+      }
+    }
+    
+    auto CapabilityOf = [&] (Value* Incoming) -> Value* {
+      Instruction* I2 = dyn_cast<Instruction>(Incoming);
+      if (!I2)
+        return RawNull;
+      InferredCapability I2Cap = InferredCapabilities[I2];
+      if (I2Cap.Capability) {
+        assert(I2Cap.State == CapabilityInferenceState::Definite);
+        assert(I2Cap.Capability->getType() == RawPtrTy);
+        return I2Cap.Capability;
+      }
+      return RawNull;
+    };
+      
+    for (auto& Pair : InferredCapabilities) {
+      Instruction* I = Pair.first;
+      InferredCapability ICap = Pair.second;
+      if (!ICap.Capability)
+        continue;
+
+      if (PHINode* Phi = dyn_cast<PHINode>(I)) {
+        PHINode* NewPhi = cast<PHINode>(ICap.Capability);
+        for (unsigned Index = Phi->getNumIncomingValues(); Index--;) {
+          NewPhi->addIncoming(CapabilityOf(Phi->getIncomingValue(Index)),
+                              Phi->getIncomingBlock(Index));
+        }
+      }
+      if (SelectInst* Select = dyn_cast<SelectInst>(I)) {
+        SelectInst* NewSelect = cast<SelectInst>(ICap.Capability);
+        NewSelect->setTrueValue(CapabilityOf(Select->getTrueValue()));
+        NewSelect->setFalseValue(CapabilityOf(Select->getFalseValue()));
+      }
+    }
+
+    for (Instruction* I : AllInsts) {
+      IntToPtrInst* IntToPtr = dyn_cast<IntToPtrInst>(I);
+      if (!IntToPtr)
+        continue;
+
+      Value* Capability = CapabilityOf(IntToPtr->getOperand(0));
+      if (Capability == RawNull)
+        continue;
+      
+      Instruction* PtrToInt = new PtrToIntInst(Capability, IntPtrTy, "filc_ptr_to_int", I);
+      PtrToInt->setDebugLoc(I->getDebugLoc());
+      Instruction* Neg = BinaryOperator::Create(
+        Instruction::Sub, ConstantInt::get(IntPtrTy, 0), PtrToInt, "filc_ptr_neg", I);
+      Neg->setDebugLoc(I->getDebugLoc());
+      Instruction* Sub = GetElementPtrInst::Create(Int8Ty, Capability, { Neg }, "filc_ptr_sub", I);
+      Sub->setDebugLoc(I->getDebugLoc());
+      Instruction* Add = GetElementPtrInst::Create(Int8Ty, Sub, { IntToPtr->getOperand(0) },
+                                                   "filc_ptr_add", I);
+      Add->setDebugLoc(I->getDebugLoc());
+      IntToPtr->replaceAllUsesWith(Add);
+      IntToPtr->eraseFromParent();
+    }
+  }
+
+  void inferPointerAsIntLaundering() {
+    for (Function& F : M.functions()) {
+      if (!F.isDeclaration())
+        inferPointerAsIntLaunderingForFunction(F);
+    }
+  }
+
   void lowerThreadLocalOperands(Instruction* I) {
     IntrinsicInst* II = dyn_cast<IntrinsicInst>(I);
     if (II && II->getIntrinsicID() == Intrinsic::threadlocal_address)
@@ -5419,12 +5646,8 @@ class Pizlonator {
         }
         continue;
       }
-      
-      if (ConstantExpr* CE = dyn_cast<ConstantExpr>(U)) {
-        Instruction* NewI = CE->getAsInstruction(InsertBefore);
-        lowerThreadLocalOperands(NewI);
-        U = NewI;
-      }
+
+      assert(!isa<ConstantExpr>(U));
     }
   }
 
@@ -6188,6 +6411,8 @@ public:
 
     undefineAvailableExternally();
     removeIrrelevantIntrinsics();
+    expandConstantExprs();
+    inferPointerAsIntLaundering();
 
     if (verbose) {
       errs() << "Module with irrelevant intrinsics removed:\n" << M << "\n";

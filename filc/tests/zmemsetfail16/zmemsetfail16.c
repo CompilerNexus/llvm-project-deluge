@@ -1,5 +1,6 @@
 #include <stdfil.h>
 #include <inttypes.h>
+#include "utils.h"
 
 int main()
 {
@@ -10,7 +11,7 @@ int main()
         array[i] = hello;
     zprintf("got this far\n");
     zmemset((char*)array + 1, 42, sizeof(array) - 1);
-    ZASSERT(array[0] == (char*)((uintptr_t)0x2a2a2a2a2a2a2a00lu | ((uintptr_t)hello & 0xff)));
+    ZASSERT(opaque(array[0]) == (char*)((uintptr_t)0x2a2a2a2a2a2a2a00lu | ((uintptr_t)hello & 0xff)));
     ZASSERT(!zhasvalidcap(array[0]));
     for (i = 1; i < 4; ++i) {
         ZASSERT(array[i] == (char*)0x2a2a2a2a2a2a2a2alu);
