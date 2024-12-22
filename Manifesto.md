@@ -6,8 +6,8 @@ where a pointer points and what is written into it, which leads to an easy path 
 of other languages (Rust, Java, Haskell, even JavaScript) don't have this problem!
 
 But I love C. And I love C++ almost as much. I grew up on them. It's such a joy for me to
-use both of them! Therefore, in my spare time, I decided
-to make my own memory-safe C and C++. This is a personal project and an expression of my love for C.
+use both of them! Therefore, in my spare time, I decided to make my own memory-safe C and C++. This is
+a personal project and an expression of my love for C.
 
 Fil-C introduces memory safety at the core of C and C++:
  
@@ -25,7 +25,7 @@ Fil-C introduces memory safety at the core of C and C++:
 - All allocations are *garbage collected* using
   [FUGC](https://github.com/pizlonator/llvm-project-deluge/blob/deluge/libpas/src/libpas/fugc.c) (Fil's
   Unbelievable Garbage Collector). FUGC is a concurrent, real time, accurate garbage collector.
-  Threads are never suspended for GC. Freeing an object causes all word types to transition to *free*,
+  Threads are never suspended for GC. Freeing an object causes its capability to have zero bounds,
   which prevents all future access. FUGC will redirect all object pointers to free objects to the free
   singleton object, which ensures that freed objects are definitely collected on the next cycle.
   Accessing a freed object before or after the next GC is guaranted to trap. Also, freeing objects is
@@ -36,12 +36,11 @@ Fil-C introduces memory safety at the core of C and C++:
   unions. It's even possible to have int-ptr unions and to ping-pong between using the int and ptr
   members.
 
-- The combination of InvisiCapsCaps and FUGC means that pointer capabilities cannot be forged. Your
+- The combination of InvisiCaps and FUGC means that pointer capabilities cannot be forged. Your
   program may have logic errors (bad casts, bogus pointer arithmetic, races, bad frees, use-after-free,
-  whatever)
-  but every pointer will remember the bounds and type of the thing it originated from. If you break
-  that pointer's rules by trying to access out-of-bounds, or read an int as a pointer or vice-versa, or
-  access a freed object, Fil-C will thwart your program's further execution.
+  whatever) but every pointer will remember the bounds and type of the thing it originated from. If
+  you break that pointer's rules by trying to access out-of-bounds, or read an int as a pointer or
+  vice-versa, or access a freed object, Fil-C will thwart your program's further execution.
 
 - Fil-C supports tricky features like pthreads, signal handlers, mmap, C++ exceptions (which implies
   libunwind), and setjmp/longjmp. All of these features are memory-safe. Because Fil-C pointers
@@ -65,8 +64,10 @@ on top of a [memory-safe OpenSSL](https://github.com/pizlonator/deluded-openssl-
 [memory-safe CPython](https://github.com/pizlonator/pizlonated-cpython) (which required some changes
 and even [found a bug](https://github.com/python/cpython/issues/118534)),
 [memory-safe SQLite](https://github.com/pizlonator/pizlonated-sqlite),
-[memory-safe libcxx and libcxxabi](https://github.com/pizlonator/llvm-project-deluge/tree/deluge), and
-[memory-safe musl](https://github.com/pizlonator/deluded-musl) (Fil-C's current libc).
+[memory-safe libcxx and libcxxabi](https://github.com/pizlonator/llvm-project-deluge/tree/deluge),
+[memory-safe musl](https://github.com/pizlonator/deluded-musl) (Fil-C's current libc),
+[memory-safe ICU](https://github.com/pizlonator/pizlonated-pic), as well as other programs (the list
+is growing all the time).
 
 Thanks to the flexibility of InvisiCaps, most programs compile and run with zero changes. Even
 sophisticated programs like Lua and OpenSSH require zero code changes to work!
