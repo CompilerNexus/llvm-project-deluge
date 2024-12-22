@@ -66,7 +66,7 @@ and even [found a bug](https://github.com/python/cpython/issues/118534)),
 [memory-safe SQLite](https://github.com/pizlonator/pizlonated-sqlite),
 [memory-safe libcxx and libcxxabi](https://github.com/pizlonator/llvm-project-deluge/tree/deluge),
 [memory-safe musl](https://github.com/pizlonator/deluded-musl) (Fil-C's current libc),
-[memory-safe ICU](https://github.com/pizlonator/pizlonated-pic), as well as other programs (the list
+[memory-safe ICU](https://github.com/pizlonator/pizlonated-icu), as well as other programs (the list
 is growing all the time).
 
 Thanks to the flexibility of InvisiCaps, most programs compile and run with zero changes. Even
