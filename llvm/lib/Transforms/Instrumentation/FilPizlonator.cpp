@@ -1831,6 +1831,12 @@ class Pizlonator {
     return false;
   }
 
+  Align lowAlign(Type* T, Align A, AtomicOrdering AO) {
+    if (needToCheckAlignment(T) || AO != AtomicOrdering::NotAtomic)
+      return A;
+    return Align(1);
+  }
+
   Value* loadValueRecurseAfterCheck(
     Type* T, Value* P, Value* BaseAuxP, Value* AuxP,
     bool isVolatile, Align A, AtomicOrdering AO, SyncScope::ID SS, MemoryKind MK,
@@ -1838,7 +1844,7 @@ class Pizlonator {
     A = std::min(DL.getABITypeAlign(T), A);
     
     if (!hasPtrs(T))
-      return new LoadInst(T, P, "filc_load", isVolatile, A, AO, SS, InsertBefore);
+      return new LoadInst(T, P, "filc_load", isVolatile, lowAlign(T, A, AO), AO, SS, InsertBefore);
     
     if (isa<FunctionType>(T)) {
       llvm_unreachable("shouldn't see function types in loadValueRecurseAfterCheck");
@@ -1932,7 +1938,7 @@ class Pizlonator {
     A = std::min(DL.getABITypeAlign(T), A);
     
     if (!hasPtrs(T)) {
-      new StoreInst(V, P, isVolatile, A, AO, SS, InsertBefore);
+      new StoreInst(V, P, isVolatile, lowAlign(T, A, AO), AO, SS, InsertBefore);
       return;
     }
     
@@ -2837,12 +2843,53 @@ class Pizlonator {
       AccessCheckWithDI(CanonicalPtr, 0, 0, CheckKind::NotFree, DI));
   }
 
-  void buildChecksRecurse(Type* T, Value* HighP, int64_t Offset, size_t Alignment, AccessKind AK,
-                          const CombinedDI* DI, std::vector<AccessCheckWithDI>& Checks) {
+  bool needToCheckAlignment(Type* T) {
+    // FIXME: This is very X86-specific.
+    
+    assert(T != FlightPtrTy);
+
+    if (isa<FunctionType>(T))
+      return false;
+
+    if (isa<TypedPointerType>(T)) {
+      llvm_unreachable("Shouldn't ever see typed pointers");
+      return false;
+    }
+
+    if (isa<PointerType>(T))
+      return true;
+
+    if (T->isIntegerTy())
+      return false;
+
+    if (T->isFloatTy() || T->isDoubleTy())
+      return false;
+
+    if (StructType* ST = dyn_cast<StructType>(T)) {
+      assert(!ST->isOpaque());
+      for (Type* InnerT : ST->elements()) {
+        if (needToCheckAlignment(InnerT))
+          return true;
+      }
+      return false;
+    }
+
+    if (ArrayType* AT = dyn_cast<ArrayType>(T))
+      return needToCheckAlignment(AT->getElementType());
+
+    return true;
+  }
+
+  void buildChecksRecurse(Type* T, Value* HighP, int64_t Offset, size_t Alignment, AtomicOrdering AO,
+                          AccessKind AK, const CombinedDI* DI,
+                          std::vector<AccessCheckWithDI>& Checks) {
     if (!hasPtrs(T)) {
-      buildCheck(
-        DL.getTypeStoreSize(T), MinAlign(DL.getABITypeAlign(T).value(), Alignment), HighP,
-        Offset, AK, DI, Checks);
+      size_t CheckedAlignment;
+      if (needToCheckAlignment(T) || AO != AtomicOrdering::NotAtomic)
+        CheckedAlignment = MinAlign(DL.getABITypeAlign(T).value(), Alignment);
+      else
+        CheckedAlignment = 1;
+      buildCheck(DL.getTypeStoreSize(T), CheckedAlignment, HighP, Offset, AK, DI, Checks);
       return;
     }
     
@@ -2873,7 +2920,7 @@ class Pizlonator {
       for (unsigned Index = ST->getNumElements(); Index--;) {
         Type* InnerT = ST->getElementType(Index);
         buildChecksRecurse(
-          InnerT, HighP, Offset + SL->getElementOffset(Index), Alignment, AK, DI, Checks);
+          InnerT, HighP, Offset + SL->getElementOffset(Index), Alignment, AO, AK, DI, Checks);
       }
       return;
     }
@@ -2882,7 +2929,7 @@ class Pizlonator {
       Type* ET = AT->getElementType();
       size_t ESize = DL.getTypeAllocSize(ET);
       for (int64_t Index = AT->getNumElements(); Index--;)
-        buildChecksRecurse(ET, HighP, Offset + Index * ESize, Alignment, AK, DI, Checks);
+        buildChecksRecurse(ET, HighP, Offset + Index * ESize, Alignment, AO, AK, DI, Checks);
       return;
     }
       
@@ -2890,7 +2937,7 @@ class Pizlonator {
       Type* ET = VT->getElementType();
       size_t ESize = DL.getTypeAllocSize(ET);
       for (int64_t Index = VT->getElementCount().getFixedValue(); Index--;)
-        buildChecksRecurse(ET, HighP, Offset + Index * ESize, Alignment, AK, DI, Checks);
+        buildChecksRecurse(ET, HighP, Offset + Index * ESize, Alignment, AO, AK, DI, Checks);
       return;
     }
 
@@ -2936,8 +2983,8 @@ class Pizlonator {
     return PtrAndOffset(OriginalHighP, 0);
   }
 
-  void buildChecks(Instruction* I, Type* T, Value* HighP, Align Alignment, AccessKind AK,
-                   std::vector<AccessCheckWithDI>& Checks) {
+  void buildChecks(Instruction* I, Type* T, Value* HighP, Align Alignment, AtomicOrdering AO,
+                   AccessKind AK, std::vector<AccessCheckWithDI>& Checks) {
     if (verbose) {
       errs() << "Building checks for " << *I << " with T = " << *T << ", HighP = " << *HighP
              << ", Alignment = " << Alignment.value() << ", AK = " << accessKindString(AK) << "\n";
@@ -2946,7 +2993,7 @@ class Pizlonator {
     PtrAndOffset PAO = canonicalizePtr(HighP);
     if (verbose)
       errs() << "PAO = " << *PAO.HighP << ", offset = " << PAO.Offset << "\n";
-    buildChecksRecurse(T, PAO.HighP, PAO.Offset, Alignment.value(), AK, basicDI(I->getDebugLoc()),
+    buildChecksRecurse(T, PAO.HighP, PAO.Offset, Alignment.value(), AO, AK, basicDI(I->getDebugLoc()),
                        Checks);
     canonicalizeAccessChecks(Checks);
   }
@@ -2956,39 +3003,44 @@ class Pizlonator {
     if (LoadInst* LI = dyn_cast<LoadInst>(I)) {
       Type* T = LI->getType();
       Value* HighP = LI->getPointerOperand();
-      Func(LI, T, HighP, LI->getAlign(), AccessKind::Read);
+      Func(LI, T, HighP, LI->getAlign(), LI->getOrdering(), AccessKind::Read);
       return;
     }
     
     if (StoreInst* SI = dyn_cast<StoreInst>(I)) {
       Type* T = SI->getValueOperand()->getType();
       Value* HighP = SI->getPointerOperand();
-      Func(SI, T, HighP, SI->getAlign(), AccessKind::Write);
+      Func(SI, T, HighP, SI->getAlign(), SI->getOrdering(), AccessKind::Write);
       return;
     }
     
     if (AtomicCmpXchgInst* AI = dyn_cast<AtomicCmpXchgInst>(I)) {
+      assert(AI->getMergedOrdering() != AtomicOrdering::NotAtomic);
       Type* T = AI->getNewValOperand()->getType();
       Value* HighP = AI->getPointerOperand();
-      Func(AI, T, HighP, AI->getAlign(), AccessKind::Write);
+      Func(AI, T, HighP, AI->getAlign(), AI->getMergedOrdering(), AccessKind::Write);
       return;
     }
     
     if (AtomicRMWInst* AI = dyn_cast<AtomicRMWInst>(I)) {
+      assert(AI->getOrdering() != AtomicOrdering::NotAtomic);
       Type* T = AI->getValOperand()->getType();
       Value* HighP = AI->getPointerOperand();
-      Func(AI, T, HighP, AI->getAlign(), AccessKind::Write);
+      Func(AI, T, HighP, AI->getAlign(), AI->getOrdering(), AccessKind::Write);
       return;
     }
 
     if (IntrinsicInst* II = dyn_cast<IntrinsicInst>(I)) {
       switch (II->getIntrinsicID()) {
       case Intrinsic::vastart:
-        Func(II, RawPtrTy, II->getArgOperand(0), Align(WordSize), AccessKind::Write);
+        Func(II, RawPtrTy, II->getArgOperand(0), Align(WordSize), AtomicOrdering::NotAtomic,
+             AccessKind::Write);
         return;
       case Intrinsic::vacopy:
-        Func(II, RawPtrTy, II->getArgOperand(0), Align(WordSize), AccessKind::Write);
-        Func(II, RawPtrTy, II->getArgOperand(1), Align(WordSize), AccessKind::Read);
+        Func(II, RawPtrTy, II->getArgOperand(0), Align(WordSize), AtomicOrdering::NotAtomic,
+             AccessKind::Write);
+        Func(II, RawPtrTy, II->getArgOperand(1), Align(WordSize), AtomicOrdering::NotAtomic,
+             AccessKind::Read);
         return;
       default:
         return;
@@ -2998,7 +3050,8 @@ class Pizlonator {
     if (CallBase* CI = dyn_cast<CallBase>(I)) {
       if (Function* F = dyn_cast<Function>(CI->getCalledOperand())) {
         if (isSetjmp(F)) {
-          Func(CI, RawPtrTy, CI->getArgOperand(0), Align(WordSize), AccessKind::Write);
+          Func(CI, RawPtrTy, CI->getArgOperand(0), Align(WordSize), AtomicOrdering::NotAtomic,
+               AccessKind::Write);
           return;
         }
       }
@@ -3006,14 +3059,15 @@ class Pizlonator {
   }
 
   void buildChecks(Instruction* I, std::vector<AccessCheckWithDI>& Checks) {
-    forEachCheck(I, [&] (Instruction* I, Type* T, Value* HighP, Align Alignment, AccessKind AK) {
-      buildChecks(I, T, HighP, Alignment, AK, Checks);
+    forEachCheck(I, [&] (Instruction* I, Type* T, Value* HighP, Align Alignment, AtomicOrdering AO,
+                         AccessKind AK) {
+      buildChecks(I, T, HighP, Alignment, AO, AK, Checks);
     });
   }
 
   template<typename FuncT>
   void forEachCanonicalPtrOperand(Instruction* I, const FuncT& Func) {
-    forEachCheck(I, [&] (Instruction*, Type*, Value* HighP, Align, AccessKind) {
+    forEachCheck(I, [&] (Instruction*, Type*, Value* HighP, Align, AtomicOrdering, AccessKind) {
       Func(canonicalizePtr(HighP));
     });
   }

@@ -1,7 +1,7 @@
 return:
-  failure
-output-includes:
+  success
+output-excludes:
   - "filc safety error"
   - "alignment requirement of 4 bytes not met"
-output-excludes:
-  - "x ="
+output-includes:
+  - "x = 42"
