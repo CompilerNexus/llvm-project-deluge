@@ -22,6 +22,7 @@
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/TypedPointerType.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/IR/IntrinsicsX86.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Transforms/Utils/PromoteMemToReg.h>
@@ -4780,6 +4781,9 @@ class Pizlonator {
       case Intrinsic::eh_sjlj_longjmp:
       case Intrinsic::eh_sjlj_setup_dispatch:
         llvm_unreachable("Cannot use sjlj intrinsics.");
+        return true;
+
+      case Intrinsic::x86_xgetbv:
         return true;
 
       default:
