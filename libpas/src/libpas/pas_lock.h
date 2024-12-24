@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 Apple Inc. All rights reserved.
- * Copyright (c) 2023 Epic Games, Inc. All Rights Reserved.
+ * Copyright (c) 2023-2024 Epic Games, Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -174,6 +174,75 @@ static inline void pas_lock_assert_held(pas_lock* lock)
 static inline void pas_lock_testing_assert_held(pas_lock* lock)
 {
 	PAS_TESTING_ASSERT(!TryAcquireSRWLockExclusive(&lock->lock));
+}
+
+PAS_END_EXTERN_C;
+
+#elif PAS_OS(LINUX)
+
+PAS_BEGIN_EXTERN_C;
+
+struct pas_lock;
+typedef struct pas_lock pas_lock;
+
+struct pas_lock {
+    uint32_t lock;
+};
+
+#define PAS_LOCK_NOT_HELD 0
+#define PAS_LOCK_HELD 1
+#define PAS_LOCK_HELD_WAITING 2
+#define PAS_LOCK_DISABLED 3
+
+#define PAS_LOCK_INITIALIZER ((pas_lock){ .lock = PAS_LOCK_NOT_HELD })
+
+static inline void pas_lock_construct(pas_lock* lock)
+{
+    lock->lock = PAS_LOCK_NOT_HELD;
+}
+
+static inline void pas_lock_construct_disabled(pas_lock* lock)
+{
+    lock->lock = PAS_LOCK_DISABLED;
+}
+
+PAS_API void pas_lock_lock_slow(pas_lock* lock);
+PAS_API void pas_lock_unlock_slow(pas_lock* lock);
+
+static inline void pas_lock_lock(pas_lock* lock)
+{
+    if (pas_compare_and_swap_uint32_strong(&lock->lock, PAS_LOCK_NOT_HELD, PAS_LOCK_HELD)
+        == PAS_LOCK_NOT_HELD)
+        return;
+
+    pas_lock_lock_slow(lock);
+}
+
+static inline bool pas_lock_try_lock(pas_lock* lock)
+{
+    return pas_compare_and_swap_uint32_strong(&lock->lock, PAS_LOCK_NOT_HELD, PAS_LOCK_HELD)
+        == PAS_LOCK_NOT_HELD;
+}
+
+static inline void pas_lock_unlock(pas_lock* lock)
+{
+    if (pas_compare_and_swap_uint32_strong(&lock->lock, PAS_LOCK_HELD, PAS_LOCK_NOT_HELD)
+        == PAS_LOCK_HELD)
+        return;
+
+    pas_lock_unlock_slow(lock);
+}
+
+static inline void pas_lock_assert_held(pas_lock* lock)
+{
+    uint32_t state = lock->lock;
+    PAS_ASSERT(state == PAS_LOCK_HELD || PAS_LOCK_HELD_WAITING);
+}
+
+static inline void pas_lock_testing_assert_held(pas_lock* lock)
+{
+    if (PAS_ENABLE_TESTING)
+        pas_lock_assert_held(lock);
 }
 
 PAS_END_EXTERN_C;

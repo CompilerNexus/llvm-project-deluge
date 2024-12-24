@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 Apple Inc. All rights reserved.
- * Copyright (c) 2023 Epic Games, Inc. All Rights Reserved.
+ * Copyright (c) 2023-2024 Epic Games, Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,6 +32,9 @@
 #if PAS_OS(DARWIN)
 #include <mach/mach_traps.h>
 #include <mach/thread_switch.h>
+#endif
+#if PAS_OS(LINUX)
+#include <futex_calls.h>
 #endif
 
 bool pas_lock_disallowed;
@@ -73,6 +76,68 @@ PAS_NEVER_INLINE void pas_lock_lock_slow(pas_lock* lock)
     }
 }
 
-#endif /* PAS_USE_SPINLOCKS */
+#elif PAS_OS(LINUX)
+
+void pas_lock_lock_slow(pas_lock* lock)
+{
+    unsigned count = 40;
+    while (count--) {
+        uint32_t old_state = pas_compare_and_swap_uint32_strong(&lock->lock,
+                                                                PAS_LOCK_NOT_HELD,
+                                                                PAS_LOCK_HELD);
+        if (old_state == PAS_LOCK_NOT_HELD)
+            return;
+        if (old_state == PAS_LOCK_HELD_WAITING)
+            break;
+        sched_yield();
+    }
+
+    /* The trick is that if we ever choose to wait, then we will acquire the lock in the waiting
+       state. This ensures that the lock never forgets that there are threads waiting. It is also
+       slightly conservative: if there's a queue of threads waiting, then the last thread in the
+       queue will acquire in waiting mode and then do a wake when unlocking, even though it doesn't
+       strictly have to since it's the last one. */
+    uint32_t locked_state = PAS_LOCK_HELD;
+    for (;;) {
+        uint32_t old_state = lock->lock;
+
+        if (old_state == PAS_LOCK_NOT_HELD) {
+            if (pas_compare_and_swap_uint32_strong(&lock->lock, PAS_LOCK_NOT_HELD, locked_state)
+                == PAS_LOCK_NOT_HELD)
+                return;
+            continue;
+        }
+
+        if (old_state == PAS_LOCK_HELD) {
+            if (pas_compare_and_swap_uint32_strong(&lock->lock, PAS_LOCK_HELD, PAS_LOCK_HELD_WAITING)
+                != PAS_LOCK_HELD)
+                continue;
+        } else
+            PAS_ASSERT(old_state == PAS_LOCK_HELD_WAITING);
+        locked_state = PAS_LOCK_HELD_WAITING;
+
+        futex_wait((volatile int*)&lock->lock, PAS_LOCK_HELD_WAITING, 0);
+    }
+}
+
+void pas_lock_unlock_slow(pas_lock* lock)
+{
+    for (;;) {
+        if (pas_compare_and_swap_uint32_strong(&lock->lock, PAS_LOCK_HELD, PAS_LOCK_NOT_HELD)
+            == PAS_LOCK_HELD)
+            return;
+
+        uint32_t old_state = lock->lock;
+        PAS_ASSERT(old_state == PAS_LOCK_HELD || old_state == PAS_LOCK_HELD_WAITING);
+
+        if (pas_compare_and_swap_uint32_strong(&lock->lock, PAS_LOCK_HELD_WAITING, PAS_LOCK_NOT_HELD)
+            == PAS_LOCK_HELD_WAITING) {
+            futex_wake((volatile int*)&lock->lock, 1, 0);
+            return;
+        }
+    }
+}
+
+#endif /* PAS_OS(LINUX) */
 
 #endif /* LIBPAS_ENABLED */

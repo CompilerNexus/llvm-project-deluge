@@ -174,7 +174,7 @@
 #define PAS_COMPACT_PTR_MASK             ((uintptr_t)(((uint64_t)1 \
                                                        << (PAS_COMPACT_PTR_BITS & 63)) - 1))
 
-#if PAS_OS(DARWIN) || defined(_WIN32)
+#if PAS_OS(DARWIN) || defined(_WIN32) || PAS_OS(LINUX)
 #define PAS_USE_SPINLOCKS                0
 #else
 #define PAS_USE_SPINLOCKS                1
