@@ -5110,6 +5110,7 @@ class Pizlonator {
     if (GetElementPtrInst* GI = dyn_cast<GetElementPtrInst>(I)) {
       Value* HighP = GI->getOperand(0);
       GI->getOperandUse(0) = flightPtrPtr(HighP, GI);
+      GI->setIsInBounds(false);
       hackRAUW(GI, [&] () { return flightPtrWithPtr(HighP, GI, GI->getNextNode()); });
       return;
     }
