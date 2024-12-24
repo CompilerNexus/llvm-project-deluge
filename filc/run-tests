@@ -97,7 +97,7 @@ $testDirectory.each_entry {
     fullPath = $testDirectory + testName
     next unless fullPath.directory?
     unless (fullPath + "manifest").exist?
-        puts "Skipping #{entry}, no manifest."
+        puts "Skipping #{testName}, no manifest."
         next
     end
     outputPath = $testOutputDirectory + testName
