@@ -403,31 +403,31 @@ zweak_cas_ptr(void** ptr, void* expected, void* new_value)
 static inline __attribute__((__always_inline__)) void*
 zunfenced_strong_cas_ptr(void** ptr, void* expected, void* new_value)
 {
-    __c11_atomic_compare_exchange_weak((void*_Atomic*)ptr, &expected, new_value,
-                                       __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+    __c11_atomic_compare_exchange_strong((void*_Atomic*)ptr, &expected, new_value,
+                                         __ATOMIC_RELAXED, __ATOMIC_RELAXED);
     return expected;
 }
 
 static inline __attribute__((__always_inline__)) void*
 zstrong_cas_ptr(void** ptr, void* expected, void* new_value)
 {
-    __c11_atomic_compare_exchange_weak((void*_Atomic*)ptr, &expected, new_value,
-                                       __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    __c11_atomic_compare_exchange_strong((void*_Atomic*)ptr, &expected, new_value,
+                                         __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
     return expected;
 }
 
 static inline __attribute__((__always_inline__)) filc_bool
 zunfenced_intense_cas_ptr(void** ptr, void** expected, void* new_value)
 {
-    return __c11_atomic_compare_exchange_weak((void*_Atomic*)ptr, expected, new_value,
-                                              __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+    return __c11_atomic_compare_exchange_strong((void*_Atomic*)ptr, expected, new_value,
+                                                __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 }
 
 static inline __attribute__((__always_inline__)) filc_bool
 zintense_cas_ptr(void** ptr, void** expected, void* new_value)
 {
-    return __c11_atomic_compare_exchange_weak((void*_Atomic*)ptr, expected, new_value,
-                                              __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    return __c11_atomic_compare_exchange_strong((void*_Atomic*)ptr, expected, new_value,
+                                                __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
 static inline __attribute__((__always_inline__)) void* zunfenced_xchg_ptr(void** ptr, void* new_value)
