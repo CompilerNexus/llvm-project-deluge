@@ -354,7 +354,8 @@ void CGRecordLowering::lowerUnion(bool isNoUniqueAddress) {
     if (!StorageType ||
         getAlignment(FieldType) >  getAlignment(StorageType) ||
         (getAlignment(FieldType) == getAlignment(StorageType) &&
-        getSize(FieldType) > getSize(StorageType)))
+         getSize(FieldType) > getSize(StorageType)) ||
+        (!StorageType->isPointerTy() && FieldType->isPointerTy()))
       StorageType = FieldType;
   }
   // If we have no storage type just pad to the appropriate size and return.
