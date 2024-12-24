@@ -30,5 +30,6 @@ set -x
 
 (cd build && ninja runtimes-clean && ninja runtimes)
 ./install-cxx-$OS.sh
+./fix_clang.sh
 
 
