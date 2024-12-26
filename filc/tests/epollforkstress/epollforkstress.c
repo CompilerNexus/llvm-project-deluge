@@ -5,15 +5,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/wait.h>
 
 #define REPEAT 100000
-#define NTHREADS 10
+#define MAINREPEAT 1000
+#define NTHREADS 2
+#define NFORKS 10
 
 static void writeloop(int fd, char* data, size_t size)
 {
     while (size) {
         ssize_t result = write(fd, data, size);
-        zprintf("Wrote %ld bytes.\n", result);
         ZASSERT(result);
         if (result == -1) {
             ZASSERT(errno == EINTR);
@@ -31,7 +33,6 @@ static size_t readloop(int fd, char* data, size_t size)
     size_t bytes_read = 0;
     while (size) {
         ssize_t result = read(fd, data, size);
-        zprintf("Read %ld bytes.\n", result);
         if (!result)
             return bytes_read;
         if (result == -1) {
@@ -71,11 +72,9 @@ static void close_loop(int fd)
     }
 }
 
-static void* thread_main(void* arg)
+static void loop(unsigned count)
 {
-    ZASSERT(!arg);
-    unsigned count;
-    for (count = REPEAT; count--;) {
+    while (count--) {
         int fds[2];
         ZASSERT(!pipe(fds));
         ZASSERT(fds[0] > 2);
@@ -121,6 +120,12 @@ static void* thread_main(void* arg)
         close_loop(fds[0]);
         close_loop(fds[1]);
     }
+}
+
+static void* thread_main(void* arg)
+{
+    ZASSERT(!arg);
+    loop(REPEAT);
     return NULL;
 }
 
@@ -128,12 +133,30 @@ int main()
 {
     pthread_t* threads = malloc(sizeof(pthread_t) * NTHREADS);
 
-    unsigned index;
-    for (index = NTHREADS; index--;)
-        ZASSERT(!pthread_create(threads + index, NULL, thread_main, NULL));
+    size_t index;
+    for (index = NFORKS; index--;) {
+        zprintf("pid = %d, index = %zu\n", getpid(), index);
+        unsigned index;
+        for (index = NTHREADS; index--;)
+            ZASSERT(!pthread_create(threads + index, NULL, thread_main, NULL));
 
-    for (index = NTHREADS; index--;)
-        ZASSERT(!pthread_join(threads[index], NULL));
+        loop(MAINREPEAT);
+        
+        int pid = fork();
+        ZASSERT(pid >= 0);
+        if (pid) {
+            int status;
+            int wait_result = wait(&status);
+            ZASSERT(wait_result == pid);
+            ZASSERT(WIFEXITED(status));
+            ZASSERT(!WEXITSTATUS(status));
+            for (index = NTHREADS; index--;)
+                ZASSERT(!pthread_join(threads[index], NULL));
+            break;
+        }
+
+        zprintf("pid = %d, child\n", getpid());
+    }
 
     return 0;
 }
