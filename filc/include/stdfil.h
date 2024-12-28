@@ -158,7 +158,7 @@ void* zgetupper(void* ptr);
 /* Get the pointer's array length, which is the distance to upper in units of the ptr's static type. */
 #define zlength(ptr) ({ \
         __typeof__((ptr) + 0) __d_ptr = (ptr); \
-        (__typeof__((ptr) + 0))zgetupper(__d_ptr) - __d_ptr; \
+        (__SIZE_TYPE__)((__typeof__((ptr) + 0))zgetupper(__d_ptr) - __d_ptr); \
     })
 
 /* Tells if the pointer has a capability and that capability is not free. */
@@ -363,6 +363,7 @@ static inline __attribute__((__always_inline__)) void zstore_store_fence(void)
 #if defined(__x86_64__) || defined(__x86__)
     __c11_atomic_signal_fence(__ATOMIC_SEQ_CST);
 #else
+    /* FIXME: Could do better than this on ARM. */
     __c11_atomic_thread_fence(__ATOMIC_SEQ_CST);
 #endif
 }

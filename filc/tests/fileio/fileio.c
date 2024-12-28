@@ -132,6 +132,18 @@ int main(int argc, char** argv)
     ZASSERT(epoll_wait(epfd, &ev, 1, -1) == 1);
     ZASSERT(ev.events == EPOLLIN);
     ZASSERT(ev.data.fd == fds[0]);
+    int epfd2 = dup(epfd);
+    ZASSERT(epfd2 > 2);
+    memset(&ev, 0, sizeof(ev));
+    ZASSERT(epoll_wait(epfd2, &ev, 1, -1) == 1);
+    ZASSERT(ev.events == EPOLLIN);
+    ZASSERT(ev.data.fd == fds[0]);
+    ZASSERT(!close(epfd));
+    memset(&ev, 0, sizeof(ev));
+    ZASSERT(epoll_wait(epfd2, &ev, 1, -1) == 1);
+    ZASSERT(ev.events == EPOLLIN);
+    ZASSERT(ev.data.fd == fds[0]);
+    ZASSERT(!close(epfd2));
     
     ZASSERT(read(fds[0], buf, strlen("hello") + 1) == strlen("hello") + 1);
     ZASSERT(!strcmp(buf, "hello"));

@@ -48,6 +48,7 @@ long zsys_writev(int fd, const void* iov, int iovcnt);
 long zsys_read(int fd, void* buf, __SIZE_TYPE__ size);
 long zsys_readv(int fd, const void* iov, int iovcnt);
 long zsys_write(int fd, const void* buf, __SIZE_TYPE__ size);
+int zsys_close_impl(int fd);
 int zsys_close(int fd);
 long zsys_lseek(int fd, long offset, int whence);
 void zsys_exit(int return_code);
@@ -60,6 +61,7 @@ int zsys_getpid(void);
 int zsys_clock_gettime(int clock_id, unsigned long long* timespec_ptr);
 int zsys_fstatat(int fd, const char* path, void* buf, int flag);
 int zsys_fstat(int fd, void* buf);
+int zsys_fcntl_impl(int fd, int cmd, ...);
 int zsys_fcntl(int fd, int cmd, ...);
 int zsys_sigaction(int signum, const void* act, void* oact);
 int zsys_pipe(int fds[2]);
@@ -85,11 +87,14 @@ int zsys_pselect(int nfds, void* readfds, void* writefds, void* exceptfds, const
                  const void* sigmask);
 int zsys_kill(int pid, int sig);
 int zsys_raise(int sig);
+int zsys_dup_impl(int fd);
+int zsys_dup2_impl(int oldfd, int newfd);
 int zsys_dup(int fd);
 int zsys_dup2(int oldfd, int newfd);
 int zsys_sigprocmask(int how, const void* set, void* oldset); /* This is pthread_sigmask, but sets
                                                                  errno and returns -1 on error. */
 int zsys_chdir(const char* path);
+int zsys_fork_impl(void);
 int zsys_fork(void);
 int zsys_waitpid(int pid, int* status, int options);
 int zsys_listen(int sockfd, int backlog);
@@ -226,6 +231,10 @@ void zsys_futex_requeue(volatile int* addr, int priv, int wake_count, int requeu
                         volatile int* addr2);
 int zsys_getdents(int fd, void* dirent, __SIZE_TYPE__ size);
 long zsys_getrandom(void* buf, __SIZE_TYPE__ buflen, unsigned flags);
+int zsys_epoll_create1_impl(int flags);
+int zsys_epoll_ctl_impl(int epfd, int op, int fd, void* event);
+int zsys_epoll_wait_impl(int epfd, void* events, int maxevents, int timeout);
+int zsys_epoll_pwait_impl(int epfd, void* events, int maxevents, int timeout, const void* sigmask);
 int zsys_epoll_create1(int flags);
 int zsys_epoll_ctl(int epfd, int op, int fd, void* event);
 int zsys_epoll_wait(int epfd, void* events, int maxevents, int timeout);

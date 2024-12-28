@@ -5079,7 +5079,7 @@ ssize_t filc_native_zsys_write(filc_thread* my_thread, int fd, filc_ptr buf, siz
     return FILC_SYSCALL(my_thread, write(fd, filc_ptr_ptr(buf), size));
 }
 
-int filc_native_zsys_close(filc_thread* my_thread, int fd)
+int filc_native_zsys_close_impl(filc_thread* my_thread, int fd)
 {
     if (is_reserved_fd(fd))
         return 0;
@@ -5496,7 +5496,7 @@ int filc_native_zsys_raise(filc_thread* my_thread, int sig)
     return result;
 }
 
-int filc_native_zsys_dup(filc_thread* my_thread, int fd)
+int filc_native_zsys_dup_impl(filc_thread* my_thread, int fd)
 {
     check_fd(fd);
     filc_exit(my_thread);
@@ -5508,7 +5508,7 @@ int filc_native_zsys_dup(filc_thread* my_thread, int fd)
     return result;
 }
 
-int filc_native_zsys_dup2(filc_thread* my_thread, int oldfd, int newfd)
+int filc_native_zsys_dup2_impl(filc_thread* my_thread, int oldfd, int newfd)
 {
     check_fd(oldfd);
     check_fd(newfd);
@@ -5572,7 +5572,7 @@ int filc_native_zsys_chdir(filc_thread* my_thread, filc_ptr path_ptr)
     return result;
 }
 
-int filc_native_zsys_fork(filc_thread* my_thread)
+int filc_native_zsys_fork_impl(filc_thread* my_thread)
 {
     static const bool verbose = false;
     filc_exit(my_thread);
@@ -6807,7 +6807,7 @@ einval:
     return -1;
 }
 
-int filc_native_zsys_fcntl(filc_thread* my_thread, int fd, int cmd, filc_cc_cursor* args)
+int filc_native_zsys_fcntl_impl(filc_thread* my_thread, int fd, int cmd, filc_cc_cursor* args)
 {
     check_fd(fd);
     static const bool verbose = false;
@@ -7583,7 +7583,7 @@ long filc_native_zsys_getrandom(filc_thread* my_thread, filc_ptr buf_ptr, size_t
     return FILC_SYSCALL(my_thread, getrandom(filc_ptr_ptr(buf_ptr), buflen, flags));
 }
 
-int filc_native_zsys_epoll_create1(filc_thread* my_thread, int flags)
+int filc_native_zsys_epoll_create1_impl(filc_thread* my_thread, int flags)
 {
     return FILC_SYSCALL(my_thread, epoll_create1(flags));
 }
@@ -7624,7 +7624,8 @@ static int to_user_epoll_events(int result, struct epoll_event* evs, filc_ptr ev
     return result;
 }
 
-int filc_native_zsys_epoll_ctl(filc_thread* my_thread, int epfd, int op, int fd, filc_ptr event_ptr)
+int filc_native_zsys_epoll_ctl_impl(filc_thread* my_thread, int epfd, int op, int fd,
+                                    filc_ptr event_ptr)
 {
     check_fd(epfd);
     check_fd(fd);
@@ -7632,8 +7633,8 @@ int filc_native_zsys_epoll_ctl(filc_thread* my_thread, int epfd, int op, int fd,
     return FILC_SYSCALL(my_thread, epoll_ctl(epfd, op, fd, ev));
 }
 
-int filc_native_zsys_epoll_wait(filc_thread* my_thread, int epfd, filc_ptr events_ptr, int maxevents,
-                                int timeout)
+int filc_native_zsys_epoll_wait_impl(filc_thread* my_thread, int epfd, filc_ptr events_ptr,
+                                     int maxevents, int timeout)
 {
     check_fd(epfd);
     struct epoll_event* evs = make_epoll_events(my_thread, maxevents);
@@ -7642,8 +7643,8 @@ int filc_native_zsys_epoll_wait(filc_thread* my_thread, int epfd, filc_ptr event
         evs, events_ptr);
 }
 
-int filc_native_zsys_epoll_pwait(filc_thread* my_thread, int epfd, filc_ptr events_ptr, int maxevents,
-                                 int timeout, filc_ptr sigmask_ptr)
+int filc_native_zsys_epoll_pwait_impl(filc_thread* my_thread, int epfd, filc_ptr events_ptr,
+                                      int maxevents, int timeout, filc_ptr sigmask_ptr)
 {
     check_fd(epfd);
     sigset_t* sigmask = NULL;
