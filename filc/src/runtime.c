@@ -148,6 +148,8 @@ static void lock_unlock(struct lock* lock)
    needs epoll tracking even though it doesn't, and that epoll tracking won't have anything in it
    unless the user attempts epoll operations on the fd (and those operations will fail anyway). */
 
+/* FIXME: We should have a variant called get_locked_existing_fd_holder() that doesn't try to create
+   one if there isn't one already. */
 static struct fd_holder* get_locked_fd_holder(int fd)
 {
     ZASSERT(fd >= 0);
