@@ -7734,6 +7734,11 @@ int filc_native_zsys_prctl(filc_thread* my_thread, int option, filc_cc_cursor* a
         unsigned long value4 = filc_cc_cursor_get_next_unsigned_long(my_thread, args);
         return FILC_SYSCALL(my_thread, prctl(PR_SET_NO_NEW_PRIVS, value1, value2, value3, value4));
     }
+
+    case PR_SET_PDEATHSIG: {
+        unsigned long value = filc_cc_cursor_get_next_unsigned_long(my_thread, args);
+        return FILC_SYSCALL(my_thread, prctl(PR_SET_PDEATHSIG, value));
+    }
     
     default:
         filc_set_errno(ENOSYS);
