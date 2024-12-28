@@ -242,6 +242,9 @@ int main(int argc, char** argv)
     ZASSERT(!close(fd));
     ZASSERT(!unlink("filc/test-output/fileio/allocatetest.txt"));
 
+    ZASSERT(close(-1) == -1);
+    ZASSERT(errno == EBADF);
+
     return 0;
 }
 

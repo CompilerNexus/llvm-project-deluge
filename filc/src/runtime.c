@@ -264,11 +264,17 @@ int zsys_close(int fd)
 {
     /* It's possible for the close to fail with EINTR, so we have to make sure that we only null
        the backer if the close succeeded. */
-    struct fd_holder* holder = get_locked_fd_holder(fd);
+    struct fd_holder* holder;
+    if (fd >= 0)
+        holder = get_locked_fd_holder(fd);
+    else
+        holder = 0;
     int result = zsys_close_impl(fd);
-    if (!result)
-        holder->backer = 0;
-    lock_unlock(&holder->lock);
+    if (holder) {
+        if (!result)
+            holder->backer = 0;
+        lock_unlock(&holder->lock);
+    }
     return result;
 }
 
