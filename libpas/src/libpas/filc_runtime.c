@@ -2117,6 +2117,14 @@ static PAS_ALWAYS_INLINE filc_object* finish_allocate(
     filc_thread* my_thread, void* allocation, size_t size, size_t alignment,
     size_t offset_to_payload, filc_object_flags object_flags)
 {
+    static const bool verbose = false;
+    if (verbose && (object_flags & FILC_OBJECT_FLAG_MMAP)) {
+        pas_log("[%d] allocated mmap %p...%p\n",
+                getpid(),
+                (char*)allocation + offset_to_payload,
+                (char*)allocation + offset_to_payload + size);
+        filc_thread_dump_stack(my_thread, pas_log_stream);
+    }
     filc_object* result = initialize_object_header(
         allocation, size, alignment, offset_to_payload, object_flags, NULL);
     if (PAS_UNLIKELY(size > FILC_MAX_BYTES_BETWEEN_POLLCHECKS))
