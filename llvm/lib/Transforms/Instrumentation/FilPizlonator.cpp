@@ -4848,6 +4848,7 @@ class Pizlonator {
             ValueArg = ConstantInt::get(Int32Ty, 0);
           }
           unsigned FrameIndex = Setjmps[CI];
+          storeOrigin(getOrigin(CI->getDebugLoc()), CI);
           CallInst* Create = CallInst::Create(
             JmpBufCreate,
             { MyThread, ConstantInt::get(Int32Ty, static_cast<int>(getJmpBufKindForSetjmp(F))),
