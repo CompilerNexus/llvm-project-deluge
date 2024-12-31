@@ -4858,8 +4858,8 @@ class Pizlonator {
           Value* UserJmpBuf = CI->getArgOperand(0);
           storePtr(flightPtrForPayload(Create, CI), flightPtrPtr(UserJmpBuf, CI),
                    auxPtrForOperand(UserJmpBuf, CI, 0, CI).P, CI);
-          recordLowerAtIndex(Create, FrameIndex, CI);
           CallInst* NewCI = CallInst::Create(_Setjmp, { Create }, "filc_setjmp", CI);
+          recordLowerAtIndex(Create, FrameIndex, CI);
           CI->replaceAllUsesWith(NewCI);
           NewCI->setDebugLoc(CI->getDebugLoc());
           Erasify();

@@ -4752,6 +4752,8 @@ static bool setjmp_saves_sigmask = false;
 
 filc_jmp_buf* filc_jmp_buf_create(filc_thread* my_thread, filc_jmp_buf_kind kind, int value)
 {
+    static const bool verbose = false;
+    
     PAS_ASSERT(kind == filc_jmp_buf_setjmp ||
                kind == filc_jmp_buf__setjmp ||
                kind == filc_jmp_buf_sigsetjmp);
@@ -4794,6 +4796,11 @@ filc_jmp_buf* filc_jmp_buf_create(filc_thread* my_thread, filc_jmp_buf_kind kind
         result->did_save_sigmask = true;
     }
 
+    if (verbose) {
+        pas_log("[%d] doing setjmp with jmp_buf = %p\n", getpid(), result);
+        filc_thread_dump_stack(my_thread, pas_log_stream);
+    }
+
     return result;
 }
 
@@ -4807,6 +4814,8 @@ void filc_jmp_buf_mark_outgoing_ptrs(filc_jmp_buf* jmp_buf, filc_object_array* s
 static void longjmp_impl(filc_thread* my_thread, filc_ptr jmp_buf_ptr, int value,
                          filc_jmp_buf_kind kind)
 {
+    static const bool verbose = false;
+
     PAS_ASSERT(kind == filc_jmp_buf_setjmp ||
                kind == filc_jmp_buf__setjmp ||
                kind == filc_jmp_buf_sigsetjmp);
@@ -4814,6 +4823,11 @@ static void longjmp_impl(filc_thread* my_thread, filc_ptr jmp_buf_ptr, int value
     filc_check_access_special(jmp_buf_ptr, FILC_SPECIAL_TYPE_JMP_BUF);
     filc_jmp_buf* jmp_buf = (filc_jmp_buf*)filc_ptr_ptr(jmp_buf_ptr);
 
+    if (verbose) {
+        pas_log("[%d] attempting to longjmp to jmp_buf = %p\n", getpid(), jmp_buf);
+        filc_thread_dump_stack(my_thread, pas_log_stream);
+    }
+    
     FILC_CHECK(
         jmp_buf->kind == kind,
         NULL,
