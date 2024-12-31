@@ -5111,7 +5111,7 @@ class Pizlonator {
     if (GetElementPtrInst* GI = dyn_cast<GetElementPtrInst>(I)) {
       Value* HighP = GI->getOperand(0);
       GI->getOperandUse(0) = flightPtrPtr(HighP, GI);
-      GI->setIsInBounds(false);
+      assert(!GI->isInBounds()); // Should have been cleared by dropUB().
       hackRAUW(GI, [&] () { return flightPtrWithPtr(HighP, GI, GI->getNextNode()); });
       return;
     }
@@ -6324,6 +6324,18 @@ class Pizlonator {
     }
   }
 
+  void dropUB() {
+    for (Function& F : M.functions()) {
+      for (BasicBlock& BB : F) {
+        for (Instruction& I : BB) {
+          I.dropUnknownNonDebugMetadata();
+          I.dropPoisonGeneratingFlagsAndMetadata();
+          I.dropUBImplyingAttrsAndUnknownMetadata();
+        }
+      }
+    }
+  }
+
   void prepare() {
     for (Function& F : M.functions()) {
       for (BasicBlock& BB : F) {
@@ -6475,23 +6487,25 @@ public:
     inferPointerAsIntLaundering();
 
     if (verbose) {
-      errs() << "Module with irrelevant intrinsics removed:\n" << M << "\n";
+      errs() << "Module with irrelevant intrinsics removed, constexprs expanded, and pointer "
+             << "laundering inferred:\n" << M << "\n";
     }
     
     lowerThreadLocals();
 
     if (verbose) {
-      errs() << "Module with irrelevant intrinsics removed and lowered thread locals:\n" << M << "\n";
+      errs() << "Module with lowered thread locals:\n" << M << "\n";
     }
     
     makeEHDatas();
     compileModuleAsm();
     lazifyAllocas();
     canonicalizeGEPs();
+    dropUB();
     
     if (verbose) {
-      errs() << "Module with lowered thread locals, EH data, module asm, removing irrelevant "
-             << "intrinsics, and lazifying allocas:\n" << M << "\n";
+      errs() << "Module with lowered EH data, lowered module asm, lazified allocas, and UB "
+             << "dropped:\n" << M << "\n";
     }
 
     prepare();
