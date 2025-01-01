@@ -1,0 +1,7 @@
+return:
+  failure
+output-includes:
+  - "filc safety error"
+  - "cannot use __builtin_return_address with nonzero argument"
+output-excludes:
+  - "Should not get here = "

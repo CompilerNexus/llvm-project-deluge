@@ -4786,6 +4786,35 @@ class Pizlonator {
       case Intrinsic::x86_xgetbv:
         return true;
 
+      case Intrinsic::returnaddress:
+      case Intrinsic::frameaddress: {
+        lowerConstantOperand(II->getArgOperandUse(0), I, RawNull);
+        Instruction* IsZero = new ICmpInst(
+          I, ICmpInst::ICMP_EQ, II->getArgOperand(0), ConstantInt::get(Int32Ty, 0),
+          "filc_frameaddress_arg_is_zero");
+        IsZero->setDebugLoc(I->getDebugLoc());
+        Instruction* NotZeroTerm = SplitBlockAndInsertIfElse(IsZero, I, true);
+        std::string str;
+        raw_string_ostream outs(str);
+        outs << "cannot use ";
+        switch (II->getIntrinsicID()) {
+        case Intrinsic::returnaddress:
+          outs << "__builtin_return_address";
+          break;
+        case Intrinsic::frameaddress:
+          outs << "__builtin_frame_address";
+          break;
+        default:
+          llvm_unreachable("Unexpected intrinsic");
+          break;
+        }
+        outs << " with nonzero argument.";
+        CallInst::Create(Error, { getString(str), getOrigin(I->getDebugLoc()) }, "", NotZeroTerm)
+          ->setDebugLoc(I->getDebugLoc());
+        hackRAUW(I, [&] () { return badFlightPtr(I, I->getNextNode()); });
+        return true;
+      }
+
       default:
         if (!II->getCalledFunction()->doesNotAccessMemory()
             && !isa<ConstrainedFPIntrinsic>(II)) {
