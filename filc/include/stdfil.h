@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Epic Games, Inc. All Rights Reserved.
+ * Copyright (c) 2023-2025 Epic Games, Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -231,6 +231,11 @@ static inline __attribute__((__always_inline__)) void* zretagptr(void* newptr, v
    Calling these functions forces the memset/memmove to really happen. */
 void zmemset(void* dst, unsigned value, __SIZE_TYPE__ count);
 void zmemmove(void* dst, void* src, __SIZE_TYPE__ count);
+
+/* Set the capability of a range of memory, without altering the values in that memory.
+ 
+   `dst` must be pointer-aligned. `size` is in bytes, and must be pointer-aligned. */
+void zsetcap(void* dst, void* object, __SIZE_TYPE__ size);
 
 /* Allocates a new string (with zgc_alloc(char, strlen+1)) and prints a dump of the ptr to that string.
    Returns that string.

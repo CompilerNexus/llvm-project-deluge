@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 #
-# Copyright (c) 2024 Epic Games, Inc. All Rights Reserved.
+# Copyright (c) 2024-2025 Epic Games, Inc. All Rights Reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -162,6 +162,7 @@ addSig "filc_ptr", "zptr_to_new_string", "filc_ptr"
 addSig "filc_ptr", "zptr_contents_to_new_string", "filc_ptr"
 addSig "void", "zmemset", "filc_ptr", "unsigned", "size_t"
 addSig "void", "zmemmove", "filc_ptr", "filc_ptr", "size_t"
+addSig "void", "zsetcap", "filc_ptr", "filc_ptr", "size_t"
 addSig "void", "zrun_deferred_global_ctors"
 addSig "void", "zprint", "filc_ptr"
 addSig "void", "zprint_long", "long"

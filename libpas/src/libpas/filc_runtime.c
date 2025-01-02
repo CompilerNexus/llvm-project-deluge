@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Epic Games, Inc. All Rights Reserved.
+ * Copyright (c) 2023-2025 Epic Games, Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -3856,6 +3856,34 @@ void filc_native_zmemset(filc_thread* my_thread, filc_ptr dst_ptr, unsigned valu
 void filc_native_zmemmove(filc_thread* my_thread, filc_ptr dst_ptr, filc_ptr src_ptr, size_t count)
 {
     memmove_impl(my_thread, dst_ptr, src_ptr, count, NULL);
+}
+
+void filc_native_zsetcap(filc_thread* my_thread, filc_ptr dst_ptr, filc_ptr object_ptr, size_t size)
+{
+    /* FIXME: This could be optimized a lot. */
+
+    FILC_CHECK(
+        pas_is_aligned(size, FILC_WORD_SIZE),
+        NULL,
+        "size argument must be multiple of pointer size (size = %zu).",
+        size);
+    filc_check_aligned_write(dst_ptr, size, FILC_WORD_SIZE);
+
+    void* lower = filc_ptr_lower(object_ptr);
+    char* aux_ptr = filc_ptr_ensure_aux_ptr(my_thread, dst_ptr);
+    size_t offset_begin = filc_ptr_offset(dst_ptr);
+    size_t offset_end = offset_begin + size;
+    filc_store_barrier(my_thread, filc_object_for_lower(lower));
+    size_t offset;
+    for (offset = offset_begin; offset < offset_end; offset += FILC_WORD_SIZE) {
+        filc_lower_or_box* lower_or_box_ptr = (filc_lower_or_box*)(aux_ptr + offset);
+        filc_lower_or_box_store_unfenced_unbarriered(
+            lower_or_box_ptr, filc_lower_or_box_create_lower(lower));
+        if (filc_pollcheck(my_thread, NULL)) {
+            check_accessible(dst_ptr);
+            filc_store_barrier(my_thread, filc_object_for_lower(lower));
+        }
+    }
 }
 
 static char* finish_check_and_get_new_str(char* base, size_t length)
