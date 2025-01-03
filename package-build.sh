@@ -44,10 +44,12 @@ strip $build_name/build/bin/clang-17
 
 mkdir -p $build_name/build/include/
 cp -R build/include/c++ $build_name/build/include/
+mkdir -p $build_name/build/include/x86_64-unknown-linux-gnu/
+cp -R build/include/x86_64-unknown-linux-gnu/c++ $build_name/build/include/x86_64-unknown-linux-gnu
 
 cp -R pizfix $build_name/
-rm $build_name/pizfix/etc/moduli
-rm $build_name/pizfix/etc/ssh_host*
+rm -f $build_name/pizfix/etc/moduli
+rm -f $build_name/pizfix/etc/ssh_host*
 
 sourcedir=$PWD
 
