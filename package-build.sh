@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (c) 2024 Epic Games, Inc. All Rights Reserved.
+# Copyright (c) 2024-2025 Epic Games, Inc. All Rights Reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -28,7 +28,7 @@
 set -e
 set -x
 
-build_name=filc-0.667-$OS-$ARCH
+build_name=filc-0.668-$OS-$ARCH
 
 rm -rf $build_name
 
@@ -37,6 +37,7 @@ cp README.md $build_name/
 
 mkdir -p $build_name/build/bin
 cp build/bin/clang-17 $build_name/build/bin/
+strip $build_name/build/bin/clang-17
 (cd $build_name/build/bin/ &&
      ln -s clang-17 clang &&
      ln -s clang-17 clang++)
