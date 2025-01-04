@@ -36,8 +36,7 @@ experimental piece of software!
 
 ## Things That Work
 
-Included in the binary distribution (or if you build from source using
-build_all.sh) is:
+Included if you build from source using build_all.sh:
 
 - Memory-safe SSH client and server.
 
@@ -48,6 +47,8 @@ build_all.sh) is:
 - Memory-safe libc (based on musl) and libc++ (based on LLVM's libc++).
 
 - A version of clang that you can use to compile C or C++ programs.
+
+The binary distribution only includes clang, libc, and libc++.
 
 Fil-C catches all of the stuff that makes memory safety in C hard, like:
 
@@ -76,7 +77,7 @@ and C++ exceptions.
 
 Fil-C is not a complete product. Lots of stuff isn't done!
 
-- Fil-C doesn't do anything about UB not related to memory, yet. For example,
+- Fil-C doesn't fully address UB not related to memory, yet. For example,
   dividing by zero may take the compiler down a weird path.
 
 - I'm still working on performance. In good cases, it's 1.5x slower than normal
