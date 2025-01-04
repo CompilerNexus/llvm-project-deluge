@@ -1,4 +1,4 @@
-# Fil-C 0.668
+# Fil-C 0.668.1
 
 This is a spare-time personal project that I'm doing for fun. It's called
 Fil-C.
@@ -9,6 +9,21 @@ real-time garbage collection and invisible capabilities (each pointer in memory
 has a corresponding capability, not visible to the C address space). Every
 fundamental C operation (as seen in LLVM IR) is checked against the capability.
 Fil-C has no `unsafe` escape hatch of any kind.
+
+## License
+
+The compiler (clang + LLVM) is covered by LLVM-LICENSE.txt. The runtime is
+covered by PAS-LICENSE.txt (see libpas/LICENSE.txt in the source distribution).
+The libc is covered by MUSL-LICENSE.txt (see yolomusl/COPYRIGHT and
+usermusl/COPYRIGHT in the source distribution). The libc++/libc++abi are
+covered by LLVM-LICENSE.txt.
+
+You can fetch the compiler, runtime, libc++/libc++abi source from
+https://github.com/pizlonator/llvm-project-deluge.
+
+You can fetch musl from https://github.com/pizlonator/deluded-musl (there are
+two of them - the yolomusl branch for the libc that sits below the runtime and
+the usermusl branch for the libc that sits above the runtime).
 
 ## Requirements
 
