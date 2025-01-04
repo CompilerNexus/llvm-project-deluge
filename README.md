@@ -21,9 +21,9 @@ covered by LLVM-LICENSE.txt.
 You can fetch the compiler, runtime, libc++/libc++abi source from
 https://github.com/pizlonator/llvm-project-deluge.
 
-You can fetch musl from https://github.com/pizlonator/deluded-musl (there are
-two of them - the yolomusl branch for the libc that sits below the runtime and
-the usermusl branch for the libc that sits above the runtime).
+You can fetch musl source from https://github.com/pizlonator/deluded-musl
+(there are two of them - the yolomusl branch for the libc that sits below the
+runtime and the usermusl branch for the libc that sits above the runtime).
 
 ## Requirements
 
