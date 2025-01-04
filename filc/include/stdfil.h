@@ -101,7 +101,7 @@ void* zgc_realloc(void* old_ptr, __SIZE_TYPE__ count);
    memory. */
 void* zgc_aligned_realloc(void* old_ptr, __SIZE_TYPE__ alignment, __SIZE_TYPE__ count);
 
-/* Just like `zgc_realloc`, but allocated thee reallocated memory using the same alignment constraint
+/* Just like `zgc_realloc`, but allocated the reallocated memory using the same alignment constraint
    that the original memory was allocated with.
    
    It's valid to call this with NULL old_ptr (just like realloc), and then you get default alignment.
@@ -165,7 +165,7 @@ void* zgetupper(void* ptr);
 filc_bool zhasvalidcap(void* ptr);
 
 /* Tells if the pointer is in bounds of lower/upper. This is a guarantee that a 1 byte access will
-   succeed on this pointer.. */
+   succeed on this pointer. */
 static inline __attribute__((__always_inline__)) filc_bool zinbounds(void* ptr)
 {
     return ptr >= zgetlower(ptr) && ptr < zgetupper(ptr);

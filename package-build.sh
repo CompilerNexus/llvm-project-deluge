@@ -81,19 +81,14 @@ echo 'set +x' >> setup.sh
 echo 'echo' >> setup.sh
 echo 'echo "You are all set. Try compiling something with:"' >> setup.sh
 echo 'echo' >> setup.sh
-echo "echo \"    build/bin/clang -o whatever whatever.c -O -g\"" >> setup.sh
+echo "echo \"    build/bin/clang -o whatever whatever.c -O2 -g\"" >> setup.sh
 echo 'echo' >> setup.sh
 echo 'echo "or:"' >> setup.sh
 echo 'echo' >> setup.sh
-echo "echo \"    build/bin/clang++ -o whatever whatever.cpp -O -g\"" >> setup.sh
+echo "echo \"    build/bin/clang++ -o whatever whatever.cpp -O2 -g\"" >> setup.sh
 echo 'echo' >> setup.sh
-echo 'echo "Or, try running something, like:"' >> setup.sh
-echo 'echo' >> setup.sh
-echo 'echo "    pizfix/bin/curl https://www.google.com/"' >> setup.sh
-echo 'echo' >> setup.sh
-echo 'echo "or:"' >> setup.sh
-echo 'echo' >> setup.sh
-echo 'echo "    pizfix/bin/ssh foo@bar.com"' >> setup.sh
+echo "echo \"Take a look at pizfix/stdfil-include/stdfil.h for Fil-C-specific APIs. You can\"" >> setup.sh
+echo "echo \"optionally #include <stdfil.h> if you find those APIs useful.\"" >> setup.sh
 echo 'echo' >> setup.sh
 echo "echo \"Have fun and thank you for trying $build_name.\"" >> setup.sh
 
