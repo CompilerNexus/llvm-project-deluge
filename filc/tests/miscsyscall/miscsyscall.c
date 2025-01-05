@@ -18,6 +18,8 @@
 #include <sys/utsname.h>
 #include <grp.h>
 #include <stdbool.h>
+#include <sys/random.h>
+#include <sys/syscall.h>
 
 int main(int argc, char** argv)
 {
@@ -136,13 +138,13 @@ int main(int argc, char** argv)
     ZASSERT(sigaction(SIGPIPE, &act, &oact) == 0);
     ZASSERT(oact.sa_handler == SIG_IGN);
     zprintf("oact.sa_flags = %x\n", oact.sa_flags);
-    ZASSERT(oact.sa_flags == SA_RESTART | SA_RESTORER);
+    ZASSERT(oact.sa_flags == (SA_RESTART | SA_RESTORER));
     ZASSERT(!sigismember(&oact.sa_mask, SIGPIPE));
     ZASSERT(!sigismember(&oact.sa_mask, SIGTERM));
 
     ZASSERT(sigaction(SIGPIPE, NULL, &oact) == 0);
     ZASSERT(oact.sa_handler == SIG_DFL);
-    ZASSERT(oact.sa_flags == SA_NODEFER | SA_RESTORER);
+    ZASSERT(oact.sa_flags == (SA_NODEFER | SA_RESTORER));
     ZASSERT(sigismember(&oact.sa_mask, SIGPIPE));
     ZASSERT(sigismember(&oact.sa_mask, SIGTERM));
 
@@ -236,6 +238,22 @@ int main(int argc, char** argv)
     ts.tv_sec = 0;
     ts.tv_nsec = 1;
     ZASSERT(!clock_nanosleep(CLOCK_REALTIME, 0, &ts, NULL));
+
+    ZASSERT(getrandom(buf, 256, 0) == 256);
+    all_zero = true;
+    for (index = 256; index--;) {
+        if (buf[index])
+            all_zero = false;
+    }
+    ZASSERT(!all_zero);
+
+    ZASSERT(syscall(SYS_getrandom, buf, 256, 0) == 256);
+    all_zero = true;
+    for (index = 256; index--;) {
+        if (buf[index])
+            all_zero = false;
+    }
+    ZASSERT(!all_zero);
 
     zprintf("No worries.\n");
     return 0;
