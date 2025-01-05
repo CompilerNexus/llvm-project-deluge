@@ -149,7 +149,10 @@ static void lock_unlock(struct lock* lock)
    unless the user attempts epoll operations on the fd (and those operations will fail anyway). */
 
 /* FIXME: We should have a variant called get_locked_existing_fd_holder() that doesn't try to create
-   one if there isn't one already. */
+   one if there isn't one already.
+
+   FIXME: This almost certainly introduces signal safety issues that could lead to deadlock.
+   https://github.com/pizlonator/llvm-project-deluge/issues/4 */
 static struct fd_holder* get_locked_fd_holder(int fd)
 {
     ZASSERT(fd >= 0);
