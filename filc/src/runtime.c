@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Epic Games, Inc. All Rights Reserved.
+ * Copyright (c) 2024-2025 Epic Games, Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -76,6 +76,8 @@ static int int_cas(int* ptr, int expected, int new_value)
 
 static void lock_lock(struct lock* lock)
 {
+    zincrement_signal_deferral_depth();
+    
     if (int_cas(&lock->word, LOCK_NOT_HELD, LOCK_HELD) == LOCK_NOT_HELD)
         return;
 
@@ -119,16 +121,18 @@ static void lock_unlock(struct lock* lock)
 {
     for (;;) {
         if (int_cas(&lock->word, LOCK_HELD, LOCK_NOT_HELD) == LOCK_HELD)
-            return;
+            break;
 
         int old_state = lock->word;
         ZASSERT(old_state == LOCK_HELD || old_state == LOCK_HELD_WAITING);
 
         if (int_cas(&lock->word, LOCK_HELD_WAITING, LOCK_NOT_HELD) == LOCK_HELD_WAITING) {
             zsys_futex_wake((volatile int*)&lock->word, 1, 0);
-            return;
+            break;
         }
     }
+
+    zdecrement_signal_deferral_depth();
 }
 
 /* Consider this race:
@@ -149,10 +153,7 @@ static void lock_unlock(struct lock* lock)
    unless the user attempts epoll operations on the fd (and those operations will fail anyway). */
 
 /* FIXME: We should have a variant called get_locked_existing_fd_holder() that doesn't try to create
-   one if there isn't one already.
-
-   FIXME: This almost certainly introduces signal safety issues that could lead to deadlock.
-   https://github.com/pizlonator/llvm-project-deluge/issues/4 */
+   one if there isn't one already. */
 static struct fd_holder* get_locked_fd_holder(int fd)
 {
     ZASSERT(fd >= 0);

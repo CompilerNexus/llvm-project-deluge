@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Epic Games, Inc. All Rights Reserved.
+ * Copyright (c) 2023-2025 Epic Games, Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -861,6 +861,7 @@ struct filc_jmp_buf {
                                     find the frame, and the frame knows about the jmp_buf. */
     filc_native_frame* saved_top_native_frame;
     size_t saved_allocation_roots_size;
+    unsigned saved_special_signal_deferral_depth;
     /* Need to save the GC objects referenced at that point in the stack. These must be marked so
        long as the jmp_buf is around, and they must be splatted back into place when we longjmp. */
     size_t num_lowers;
@@ -1033,6 +1034,12 @@ PAS_API void filc_enter(filc_thread* my_thread);
    
    You can exit and then reenter as much as you like. It'll be super cheap eventually. */
 PAS_API void filc_exit(filc_thread* my_thread);
+
+/* These have to be called entered, currently. The only thing stopping us from making them work
+   exited is that then, decrease_special_signal_deferral_depth would have to
+   handle_deferred_signals. */
+PAS_API void filc_increase_special_signal_deferral_depth(filc_thread* my_thread);
+PAS_API void filc_decrease_special_signal_deferral_depth(filc_thread* my_thread);
 
 /* It's hilarious that these are outline function calls right now. It's also hilarious that pop_frame
    takes the frame. In the future, it'll only use it for assertions. */

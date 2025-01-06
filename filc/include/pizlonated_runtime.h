@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Epic Games, Inc. All Rights Reserved.
+ * Copyright (c) 2023-2025 Epic Games, Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -71,6 +71,12 @@ void zthread_exit(void* result);
 filc_bool zthread_join(void* thread, void** result); /* Only fails with ESRCH for forked threads.
                                                         Returns true on success, false on failure
                                                         and sets errno. */
+
+/* Super fast signal deferral mechanism. Defers all catchable signals so long as the deferral depth
+   is nonzero. */
+void zincrement_signal_deferral_depth(void);
+void zdecrement_signal_deferral_depth(void);
+unsigned long long zget_signal_deferral_depth(void);
 
 #endif /* PIZLONATED_RUNTIME_H */
 

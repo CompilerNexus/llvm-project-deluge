@@ -16,7 +16,7 @@ static void handler(int signo)
 int main()
 {
     signal(SIGALRM, handler);
-    unsigned i;
+    volatile unsigned i;
     for (i = 100; i--;) {
         if (sigsetjmp(jb, 1))
             continue;

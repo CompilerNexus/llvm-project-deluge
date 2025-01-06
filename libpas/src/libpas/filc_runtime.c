@@ -936,6 +936,50 @@ void filc_exit(filc_thread* my_thread)
     broadcast_if_thread_stopped(my_thread);
 }
 
+void filc_increase_special_signal_deferral_depth(filc_thread* my_thread)
+{
+    PAS_ASSERT(my_thread == filc_get_my_thread());
+    PAS_ASSERT(my_thread->state & FILC_THREAD_STATE_ENTERED);
+    my_thread->special_signal_deferral_depth++;
+    PAS_ASSERT(my_thread->special_signal_deferral_depth);
+    for (;;) {
+        uint8_t old_state = my_thread->state;
+        PAS_ASSERT(old_state & FILC_THREAD_STATE_ENTERED);
+        if (!(old_state & FILC_THREAD_STATE_DEFERRED_SIGNAL))
+            break;
+        uint8_t new_state = old_state & ~FILC_THREAD_STATE_DEFERRED_SIGNAL;
+        if (pas_compare_and_swap_uint8_weak(&my_thread->state, old_state, new_state)) {
+            my_thread->have_deferred_signal_special = true;
+            break;
+        }
+    }
+}
+
+static void handle_special_signal_deferral_depth_decrease(filc_thread* my_thread)
+{
+    if (!my_thread->special_signal_deferral_depth && my_thread->have_deferred_signal_special) {
+        for (;;) {
+            uint8_t old_state = my_thread->state;
+            PAS_ASSERT(old_state & FILC_THREAD_STATE_ENTERED);
+            /* NOTE: Since we've decreased the deferral depth at this point, the DEFERRED_SIGNAL
+               bit might be set already. So we cannot assert that it isn't. */
+            uint8_t new_state = old_state | FILC_THREAD_STATE_DEFERRED_SIGNAL;
+            if (pas_compare_and_swap_uint8_weak(&my_thread->state, old_state, new_state))
+                break;
+        }
+    }
+}
+
+void filc_decrease_special_signal_deferral_depth(filc_thread* my_thread)
+{
+    PAS_ASSERT(my_thread == filc_get_my_thread());
+    PAS_ASSERT(my_thread->state & FILC_THREAD_STATE_ENTERED);
+    PAS_ASSERT(!(my_thread->state & FILC_THREAD_STATE_DEFERRED_SIGNAL));
+    PAS_ASSERT(my_thread->special_signal_deferral_depth);
+    my_thread->special_signal_deferral_depth--;
+    handle_special_signal_deferral_depth_decrease(my_thread);
+}
+
 void filc_enter_with_allocation_root(filc_thread* my_thread, void* allocation_root)
 {
     filc_enter(my_thread);
@@ -1283,13 +1327,17 @@ static void signal_pizlonator(int signum)
     }
     PAS_ASSERT(thread);
     
-    if ((thread->state & FILC_THREAD_STATE_ENTERED)) {
+    if ((thread->state & FILC_THREAD_STATE_ENTERED) || thread->special_signal_deferral_depth) {
         /* For all we know the user asked for a mask that allows us to recurse, hence the lock-freedom. */
         for (;;) {
             uint64_t old_value = thread->num_deferred_signals[signum];
             if (pas_compare_and_swap_uint64_weak(
                     thread->num_deferred_signals + signum, old_value, old_value + 1))
                 break;
+        }
+        if (thread->special_signal_deferral_depth) {
+            thread->have_deferred_signal_special = true;
+            return;
         }
         for (;;) {
             uint8_t old_state = thread->state;
@@ -4807,6 +4855,7 @@ filc_jmp_buf* filc_jmp_buf_create(filc_thread* my_thread, filc_jmp_buf_kind kind
     filc_native_frame_assert_locked(my_thread->top_native_frame);
     result->saved_top_native_frame = my_thread->top_native_frame;
     result->saved_allocation_roots_size = my_thread->allocation_roots.size;
+    result->saved_special_signal_deferral_depth = my_thread->special_signal_deferral_depth;
     result->num_lowers = function_origin->base.num_lowers_ish;
     size_t index;
     for (index = function_origin->base.num_lowers_ish; index--;) {
@@ -4905,6 +4954,13 @@ static void longjmp_impl(filc_thread* my_thread, filc_ptr jmp_buf_ptr, int value
     size_t index;
     for (index = jmp_buf->num_lowers; index--;)
         my_thread->top_frame->lowers[index] = jmp_buf->lowers[index];
+
+    PAS_ASSERT(my_thread->special_signal_deferral_depth
+               >= jmp_buf->saved_special_signal_deferral_depth);
+    if (my_thread->special_signal_deferral_depth > jmp_buf->saved_special_signal_deferral_depth) {
+        my_thread->special_signal_deferral_depth = jmp_buf->saved_special_signal_deferral_depth;
+        handle_special_signal_deferral_depth_decrease(my_thread);
+    }
 
     if (jmp_buf->did_save_sigmask)
         PAS_ASSERT(!pthread_sigmask(SIG_SETMASK, &jmp_buf->sigmask, NULL));
@@ -8340,6 +8396,21 @@ bool filc_native_zthread_join(filc_thread* my_thread, filc_ptr thread_ptr, filc_
                        filc_flight_ptr_load(my_thread, &thread->result_ptr));
     }
     return true;
+}
+
+void filc_native_zincrement_signal_deferral_depth(filc_thread* my_thread)
+{
+    filc_increase_special_signal_deferral_depth(my_thread);
+}
+
+void filc_native_zdecrement_signal_deferral_depth(filc_thread* my_thread)
+{
+    filc_decrease_special_signal_deferral_depth(my_thread);
+}
+
+unsigned long long filc_native_zget_signal_deferral_depth(filc_thread* my_thread)
+{
+    return my_thread->special_signal_deferral_depth;
 }
 
 void filc_thread_destroy_space_with_guard_page(filc_thread* my_thread)
