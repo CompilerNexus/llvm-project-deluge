@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 Apple Inc. All rights reserved.
- * Copyright (c) 2023 Epic Games, Inc. All Rights Reserved.
+ * Copyright (c) 2023-2025 Epic Games, Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -43,6 +43,11 @@ PAS_BEGIN_EXTERN_C;
 
 PAS_API void bmalloc_heap_config_activate(void);
 
+/* NOTE: This has been hacked to do check_deallocation and checked logging modes. The shipping bmalloc in WebKit
+   doesn't do that because it costs too much perf.
+   
+   Maybe we should only enable check_deallocation and checked logging modes in a testing build? */
+
 #define BMALLOC_HEAP_CONFIG PAS_BASIC_HEAP_CONFIG( \
     bmalloc, \
     .activate = bmalloc_heap_config_activate, \
@@ -50,12 +55,12 @@ PAS_API void bmalloc_heap_config_activate(void);
     .get_type_alignment = bmalloc_type_as_heap_type_get_type_alignment, \
     .dump_type = bmalloc_type_as_heap_type_dump, \
     .get_type_runtime_config = pas_heap_type_get_runtime_config_identity, \
-    .check_deallocation = false, \
+    .check_deallocation = true, \
     .small_segregated_min_align_shift = BMALLOC_MINALIGN_SHIFT, \
     .small_segregated_sharing_shift = BMALLOC_SMALL_SHARING_SHIFT, \
     .small_segregated_page_size = PAS_SMALL_PAGE_DEFAULT_SIZE, \
     .small_segregated_wasteage_handicap = PAS_SMALL_PAGE_HANDICAP, \
-    .small_exclusive_segregated_logging_mode = pas_segregated_deallocation_size_oblivious_logging_mode, \
+    .small_exclusive_segregated_logging_mode = pas_segregated_deallocation_checked_size_oblivious_logging_mode, \
     .small_shared_segregated_logging_mode = pas_segregated_deallocation_no_logging_mode, \
     .small_exclusive_segregated_enable_empty_word_eligibility_optimization = true, \
     .small_shared_segregated_enable_empty_word_eligibility_optimization = false, \
@@ -70,7 +75,7 @@ PAS_API void bmalloc_heap_config_activate(void);
     .medium_segregated_min_align_shift = PAS_MIN_MEDIUM_ALIGN_SHIFT, \
     .medium_segregated_sharing_shift = PAS_MEDIUM_SHARING_SHIFT, \
     .medium_segregated_wasteage_handicap = PAS_MEDIUM_PAGE_HANDICAP, \
-    .medium_exclusive_segregated_logging_mode = pas_segregated_deallocation_size_aware_logging_mode, \
+    .medium_exclusive_segregated_logging_mode = pas_segregated_deallocation_checked_size_aware_logging_mode, \
     .medium_shared_segregated_logging_mode = pas_segregated_deallocation_no_logging_mode, \
     .use_medium_bitfit = true, \
     .medium_bitfit_min_align_shift = PAS_MIN_MEDIUM_ALIGN_SHIFT, \
