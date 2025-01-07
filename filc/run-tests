@@ -110,6 +110,10 @@ $testDirectory.each_entry {
         end
         next
     end
+    if manifest["skip"]
+        puts "Skipping #{testName}"
+        next
+    end
     expectedReturn = manifest["return"]
     raise unless expectedReturn == "success" or expectedReturn == "failure" or
         expectedReturn == "crash" or expectedReturn == "compileFailure" or

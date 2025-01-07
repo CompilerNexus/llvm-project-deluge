@@ -941,6 +941,8 @@ private:
                         << AllocSize << " byte alloca:\n"
                         << "    alloca: " << AS.AI << "\n"
                         << "       use: " << I << "\n");
+      if (Size && I.getModule()->getDataLayout().isFilC())
+        return PI.setAborted(&I);
       return markAsDead(I);
     }
 
@@ -961,6 +963,8 @@ private:
                         << "    alloca: " << AS.AI << "\n"
                         << "       use: " << I << "\n");
       EndOffset = AllocSize;
+      if (I.getModule()->getDataLayout().isFilC())
+        PI.setAborted(&I);
     }
 
     AS.Slices.push_back(Slice(BeginOffset, EndOffset, U, IsSplittable));
@@ -1080,6 +1084,8 @@ private:
                         << AllocSize << " byte alloca:\n"
                         << "    alloca: " << AS.AI << "\n"
                         << "       use: " << SI << "\n");
+      if (SI.getModule()->getDataLayout().isFilC())
+        return PI.setAborted(&SI);
       return markAsDead(SI);
     }
 
@@ -1092,9 +1098,12 @@ private:
     assert(II.getRawDest() == *U && "Pointer use is not the destination?");
     ConstantInt *Length = dyn_cast<ConstantInt>(II.getLength());
     if ((Length && Length->getValue() == 0) ||
-        (IsOffsetKnown && Offset.uge(AllocSize)))
+        (IsOffsetKnown && Offset.uge(AllocSize))) {
       // Zero-length mem transfer intrinsics can be ignored entirely.
+      if (Length && II.getModule()->getDataLayout().isFilC())
+        return PI.setAborted(&II);
       return markAsDead(II);
+    }
 
     if (!IsOffsetKnown)
       return PI.setAborted(&II);
@@ -1128,6 +1137,8 @@ private:
           MemTransferSliceMap.find(&II);
       if (MTPI != MemTransferSliceMap.end())
         AS.Slices[MTPI->second].kill();
+      if (II.getModule()->getDataLayout().isFilC())
+        return PI.setAborted(&II);
       return markAsDead(II);
     }
 
@@ -1301,6 +1312,8 @@ private:
     // FIXME: This should instead be escaped in the event we're instrumenting
     // for address sanitization.
     if (Offset.uge(AllocSize)) {
+      if (I.getModule()->getDataLayout().isFilC())
+        return PI.setAborted(&I);
       AS.DeadOperands.push_back(U);
       return;
     }
@@ -4766,7 +4779,7 @@ AllocaInst *SROAPass::rewritePartition(AllocaInst &AI, AllocaSlices &AS,
     // FIXME: We can almost certainly get rid of this, once we have misaligned capability support.
     constexpr uint64_t FilCWordSize = 8;
     uint64_t Skew = P.beginOffset() % FilCWordSize;
-    if (DL.isNonIntegralAddressSpace(0) && NoType && Skew != 0 && P.size() >= FilCWordSize) {
+    if (DL.isFilC() && NoType && Skew != 0 && P.size() >= FilCWordSize) {
       // If we have made a nonpromotable alloca without a type then it's likely that we
       // are copying around data out of phase with the Fil-C word size. Fix the alloca so
       // that copies to/from it keep pointers in phase.
