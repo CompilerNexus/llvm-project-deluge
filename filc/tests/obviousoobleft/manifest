@@ -4,5 +4,3 @@ output-includes:
   - "filc safety error"
 output-excludes:
   - "thingy"
-skip:
-  true

@@ -588,8 +588,18 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
     // handled by BasicAA.
     if (isa<AllocaInst>(Inst) || isNoAliasCall(Inst)) {
       const Value *AccessPtr = getUnderlyingObject(MemLoc.Ptr);
-      if (AccessPtr == Inst || BatchAA.isMustAlias(Inst, AccessPtr))
+      if (AccessPtr == Inst || BatchAA.isMustAlias(Inst, AccessPtr)) {
+        if (Inst->getModule()->getDataLayout().isFilC()) {
+          // In Fil-C, we don't want to optimize loads from allocas to undef.
+          //
+          // FIXME: We could be more precise. If we know that the load is in-bounds, then we could
+          // optimize it to zero (but definitely not undef). But if we know that the load is
+          // out-of-bounds, then we either don't want to optimize it, or we want to "optimize" it to
+          // a trap.
+          return MemDepResult::getNonFuncLocal();
+        }
         return MemDepResult::getDef(Inst);
+      }
     }
 
     // If we found a select instruction for MemLoc pointer, return it as Def
