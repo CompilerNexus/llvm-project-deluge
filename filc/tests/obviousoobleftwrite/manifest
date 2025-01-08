@@ -5,5 +5,3 @@ output-includes:
 output-excludes:
   - "thingy"
   - "got here"
-skip:
-  true

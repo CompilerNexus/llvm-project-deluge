@@ -4,5 +4,3 @@ output-includes:
   - "filc safety error"
 output-excludes:
   - "x = "
-skip:
-  true

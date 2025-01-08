@@ -2332,6 +2332,9 @@ static bool isRemovableWrite(CallBase &CB, Value *UsedV,
 static bool isAllocSiteRemovable(Instruction *AI,
                                  SmallVectorImpl<WeakTrackingVH> &Users,
                                  const TargetLibraryInfo &TLI) {
+  if (AI->getModule()->getDataLayout().isFilC())
+    return false;
+  
   SmallVector<Instruction*, 4> Worklist;
   const std::optional<StringRef> Family = getAllocationFamily(AI, &TLI);
   Worklist.push_back(AI);

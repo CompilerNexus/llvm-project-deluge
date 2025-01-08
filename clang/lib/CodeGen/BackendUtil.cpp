@@ -143,6 +143,8 @@ static cl::opt<bool> FilCInlineADCE(
   cl::init(true));
 static cl::opt<bool> FilCInlineDSE(
   "filc-inline-dse", cl::desc("Run DSE during Fil-C inlining pipeline"), cl::Hidden, cl::init(true));
+static cl::opt<bool> FilCDSE(
+  "filc-dse", cl::desc("Run DSE during Fil-C pipeline"), cl::Hidden, cl::init(false));
 
 namespace {
 
@@ -983,7 +985,8 @@ void EmitAssemblyHelper::RunOptimizationPipeline(
             EarlyFPM.addPass(SimplifyCFGPass());
             EarlyFPM.addPass(SROAPass(SROAOptions::ModifyCFG));
             EarlyFPM.addPass(EarlyCSEPass());
-            EarlyFPM.addPass(DSEPass());
+            if (FilCDSE)
+              EarlyFPM.addPass(DSEPass());
             MPM.addPass(createModuleToFunctionPassAdaptor(
                           std::move(EarlyFPM), /*EagerlyInvalidate =*/ true));
 
@@ -1022,7 +1025,7 @@ void EmitAssemblyHelper::RunOptimizationPipeline(
                 InlinerFPM.addPass(SCCPPass());
               if (FilCInlineADCE)
                 InlinerFPM.addPass(ADCEPass());
-              if (FilCInlineDSE)
+              if (FilCInlineDSE && FilCDSE)
                 InlinerFPM.addPass(DSEPass());
               if (FilCInlineInstCombineLate)
                 InlinerFPM.addPass(InstCombinePass());
